@@ -106,7 +106,7 @@ func main() {
 	appLogger.Info("ホットキー登録完了: %s", hotkeyFormatted)
 	fmt.Printf("\nホットキー: %s\n", hotkeyFormatted)
 	fmt.Println("ホットキーを押すと録音が開始されます")
-	fmt.Println("Ctrl+C で終了します\n")
+	fmt.Println("Ctrl+C で終了します")
 
 	// ホットキーイベントチャネルの取得
 	eventChan := hotkeyManager.Events()
