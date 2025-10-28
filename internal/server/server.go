@@ -20,6 +20,8 @@ type Server struct {
 	httpServer *http.Server
 	listener   net.Listener
 	port       int
+	mux        *http.ServeMux
+	config     Config
 	mu         sync.Mutex
 	running    bool
 }
@@ -45,7 +47,9 @@ func DefaultConfig() Config {
 // New creates a new HTTP server
 func New(config Config) *Server {
 	return &Server{
-		port: config.Port,
+		port:   config.Port,
+		mux:    http.NewServeMux(),
+		config: config,
 	}
 }
 
@@ -68,9 +72,6 @@ func (s *Server) Start() error {
 	s.listener = listener
 	s.port = listener.Addr().(*net.TCPAddr).Port
 
-	// Setup HTTP routes
-	mux := http.NewServeMux()
-
 	// Serve frontend static files
 	frontendSubFS, err := fs.Sub(frontendFS, "frontend")
 	if err != nil {
@@ -78,17 +79,17 @@ func (s *Server) Start() error {
 		return fmt.Errorf("failed to create frontend sub-filesystem: %w", err)
 	}
 
-	// Add CORS middleware for localhost only
-	handler := corsMiddleware(mux)
+	// Register static files handler on the mux
+	s.mux.Handle("/", http.FileServer(http.FS(frontendSubFS)))
 
-	// Serve static files
-	mux.Handle("/", http.FileServer(http.FS(frontendSubFS)))
+	// Add CORS middleware for localhost only and wrap the mux
+	handler := corsMiddleware(s.mux)
 
-	// Create HTTP server
+	// Create HTTP server with configured timeouts
 	s.httpServer = &http.Server{
 		Handler:      handler,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  s.config.ReadTimeout,
+		WriteTimeout: s.config.WriteTimeout,
 	}
 
 	// Start server in goroutine
@@ -112,8 +113,8 @@ func (s *Server) Stop() error {
 		return nil
 	}
 
-	// Graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Graceful shutdown with configured timeout
+	ctx, cancel := context.WithTimeout(context.Background(), s.config.ShutdownTimeout)
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(ctx); err != nil {
@@ -143,6 +144,14 @@ func (s *Server) IsRunning() bool {
 	return s.running
 }
 
+// GetMux returns the underlying HTTP multiplexer
+// This allows registering routes directly on the mux with locking
+func (s *Server) GetMux() *http.ServeMux {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.mux
+}
+
 // corsMiddleware adds CORS headers for localhost-only access
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -170,22 +179,15 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 // RegisterAPIHandler registers an API handler at the given path
+// Can be called before or after the server starts
 func (s *Server) RegisterAPIHandler(path string, handler http.Handler) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.httpServer == nil {
-		return fmt.Errorf("server not initialized")
+	if s.mux == nil {
+		return fmt.Errorf("server mux not initialized")
 	}
 
-	// Get the mux from the server handler
-	mux, ok := s.httpServer.Handler.(*http.ServeMux)
-	if !ok {
-		// If it's wrapped in middleware, we need to get the underlying mux
-		// For now, return an error
-		return fmt.Errorf("cannot register handler after server started")
-	}
-
-	mux.Handle(path, handler)
+	s.mux.Handle(path, handler)
 	return nil
 }

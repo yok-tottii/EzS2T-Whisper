@@ -188,7 +188,12 @@ func (h *Handler) handleModelsRescan(w http.ResponseWriter, r *http.Request) {
 
 // scanModels scans the models directory and returns available models
 func (h *Handler) scanModels() []Model {
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// Cannot get home directory, return empty list
+		return []Model{}
+	}
+
 	modelsDir := filepath.Join(homeDir, "Library", "Application Support", "EzS2T-Whisper", "models")
 
 	var models []Model

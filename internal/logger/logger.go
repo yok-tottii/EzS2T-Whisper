@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -40,14 +41,15 @@ func (l Level) String() string {
 
 // Logger handles logging to file with rotation
 type Logger struct {
-	level       Level
-	file        *os.File
-	infoLog     *log.Logger
-	warnLog     *log.Logger
-	errorLog    *log.Logger
-	debugLog    *log.Logger
-	logDir      string
-	currentDay  string
+	mu            sync.RWMutex
+	level         Level
+	file          *os.File
+	infoLog       *log.Logger
+	warnLog       *log.Logger
+	errorLog      *log.Logger
+	debugLog      *log.Logger
+	logDir        string
+	currentDay    string
 	retentionDays int
 }
 
@@ -91,6 +93,9 @@ func New(config Config) (*Logger, error) {
 
 // rotateLog rotates the log file if necessary
 func (l *Logger) rotateLog() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	today := time.Now().Format("20060102")
 
 	// Check if we need to rotate (new day)
@@ -175,8 +180,12 @@ func (l *Logger) cleanOldLogs() error {
 
 // checkRotation checks if log rotation is needed and performs it
 func (l *Logger) checkRotation() {
+	l.mu.RLock()
+	currentDay := l.currentDay
+	l.mu.RUnlock()
+
 	today := time.Now().Format("20060102")
-	if l.currentDay != today {
+	if currentDay != today {
 		if err := l.rotateLog(); err != nil {
 			// Can't log this error since logging is failing
 			fmt.Fprintf(os.Stderr, "Failed to rotate log: %v\n", err)
@@ -186,38 +195,81 @@ func (l *Logger) checkRotation() {
 
 // Debug logs a debug message
 func (l *Logger) Debug(format string, v ...interface{}) {
-	if l.level <= DEBUG {
+	l.mu.RLock()
+	level := l.level
+	debugLog := l.debugLog
+	l.mu.RUnlock()
+
+	if level <= DEBUG {
 		l.checkRotation()
-		l.debugLog.Printf(format, v...)
+		l.mu.RLock()
+		debugLog := l.debugLog
+		l.mu.RUnlock()
+		if debugLog != nil {
+			debugLog.Printf(format, v...)
+		}
 	}
 }
 
 // Info logs an informational message
 func (l *Logger) Info(format string, v ...interface{}) {
-	if l.level <= INFO {
+	l.mu.RLock()
+	level := l.level
+	infoLog := l.infoLog
+	l.mu.RUnlock()
+
+	if level <= INFO {
 		l.checkRotation()
-		l.infoLog.Printf(format, v...)
+		l.mu.RLock()
+		infoLog := l.infoLog
+		l.mu.RUnlock()
+		if infoLog != nil {
+			infoLog.Printf(format, v...)
+		}
 	}
 }
 
 // Warn logs a warning message
 func (l *Logger) Warn(format string, v ...interface{}) {
-	if l.level <= WARN {
+	l.mu.RLock()
+	level := l.level
+	warnLog := l.warnLog
+	l.mu.RUnlock()
+
+	if level <= WARN {
 		l.checkRotation()
-		l.warnLog.Printf(format, v...)
+		l.mu.RLock()
+		warnLog := l.warnLog
+		l.mu.RUnlock()
+		if warnLog != nil {
+			warnLog.Printf(format, v...)
+		}
 	}
 }
 
 // Error logs an error message
 func (l *Logger) Error(format string, v ...interface{}) {
-	if l.level <= ERROR {
+	l.mu.RLock()
+	level := l.level
+	errorLog := l.errorLog
+	l.mu.RUnlock()
+
+	if level <= ERROR {
 		l.checkRotation()
-		l.errorLog.Printf(format, v...)
+		l.mu.RLock()
+		errorLog := l.errorLog
+		l.mu.RUnlock()
+		if errorLog != nil {
+			errorLog.Printf(format, v...)
+		}
 	}
 }
 
 // Close closes the log file
 func (l *Logger) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	if l.file != nil {
 		return l.file.Close()
 	}
@@ -226,10 +278,16 @@ func (l *Logger) Close() error {
 
 // SetLevel sets the logging level
 func (l *Logger) SetLevel(level Level) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	l.level = level
 }
 
 // GetLevel returns the current logging level
 func (l *Logger) GetLevel() Level {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
 	return l.level
 }

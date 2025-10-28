@@ -2,6 +2,7 @@ package tray
 
 import (
 	"log"
+	"sync"
 
 	"github.com/getlantern/systray"
 )
@@ -17,6 +18,7 @@ const (
 
 // Manager manages the system tray icon and menu
 type Manager struct {
+	stateMutex      sync.RWMutex
 	state           State
 	onSettings      func()
 	onRescanModels  func()
@@ -113,6 +115,8 @@ func (m *Manager) handleMenuEvents() {
 
 // SetState updates the tray icon based on the current state
 func (m *Manager) SetState(state State) {
+	m.stateMutex.Lock()
+	defer m.stateMutex.Unlock()
 	m.state = state
 	m.updateIcon()
 }

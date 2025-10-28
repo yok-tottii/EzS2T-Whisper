@@ -210,3 +210,68 @@ func TestGetConfig(t *testing.T) {
 		t.Errorf("Expected default mode to be PressToHold, got %v", config.Mode)
 	}
 }
+
+func TestGetConfig_DeepCopy(t *testing.T) {
+	m := New()
+
+	// Get initial config
+	config1 := m.GetConfig()
+	originalLen := len(config1.Modifiers)
+
+	// Try to mutate the returned config (these mutations should not affect internal state)
+	if len(config1.Modifiers) > 0 {
+		config1.Modifiers[0] = hotkey.ModCmd // Try to change first modifier
+	}
+	config1.Key = hotkey.KeyA  // Try to change key
+	config1.Mode = Toggle      // Try to change mode
+	_ = config1.Key            // Use the mutated values to avoid unused write warnings
+	_ = config1.Mode
+
+	// Get config again from manager
+	config2 := m.GetConfig()
+
+	// Verify internal state wasn't changed
+	if len(config2.Modifiers) != originalLen {
+		t.Errorf("Internal Modifiers length changed: expected %d, got %d",
+			originalLen, len(config2.Modifiers))
+	}
+
+	if config2.Modifiers[0] != hotkey.ModCtrl {
+		t.Errorf("Internal Modifiers[0] was mutated: expected ModCtrl, got %v",
+			config2.Modifiers[0])
+	}
+
+	if config2.Key != hotkey.KeySpace {
+		t.Errorf("Internal Key was mutated: expected KeySpace, got %v", config2.Key)
+	}
+
+	if config2.Mode != PressToHold {
+		t.Errorf("Internal Mode was mutated: expected PressToHold, got %v", config2.Mode)
+	}
+}
+
+func TestGetConfig_SliceMutation(t *testing.T) {
+	m := New()
+
+	// Get config and verify we get a copy of the slice
+	config := m.GetConfig()
+
+	// Store original modifier values
+	originalFirstModifier := config.Modifiers[0]
+
+	// Try to mutate the slice by appending
+	config.Modifiers = append(config.Modifiers, hotkey.ModShift)
+
+	// Get config again - should still have original length and values
+	config2 := m.GetConfig()
+
+	if len(config2.Modifiers) != 2 {
+		t.Errorf("Appending to returned slice affected internal state: "+
+			"expected 2 modifiers, got %d", len(config2.Modifiers))
+	}
+
+	if config2.Modifiers[0] != originalFirstModifier {
+		t.Errorf("First modifier was changed: expected %v, got %v",
+			originalFirstModifier, config2.Modifiers[0])
+	}
+}

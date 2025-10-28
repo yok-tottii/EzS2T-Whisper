@@ -179,9 +179,20 @@ func (m *Manager) IsRunning() bool {
 	return m.running
 }
 
-// GetConfig returns the current hotkey configuration
+// GetConfig returns a deep copy of the current hotkey configuration
+// to prevent callers from modifying the Manager's internal state
 func (m *Manager) GetConfig() Config {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.config
+
+	// Create a shallow copy of the config struct
+	configCopy := m.config
+
+	// Deep copy the Modifiers slice to prevent caller from mutating it
+	if m.config.Modifiers != nil {
+		configCopy.Modifiers = make([]hotkey.Modifier, len(m.config.Modifiers))
+		copy(configCopy.Modifiers, m.config.Modifiers)
+	}
+
+	return configCopy
 }
