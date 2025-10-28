@@ -75,7 +75,7 @@ Whisper.cppを使った高速ローカルSTTアプリケーションを、4週�
 - [x] トグルモードが正しく動作する
 
 **CodeRabbitレビュー:**
-- [x] `coderabbit --prompt-only` をバックグラウンドで実行
+- [x] `coderabbit review --prompt-only` をバックグラウンドで実行
 - [x] レビュー結果を確認し、指摘事項をリスト化
 - [x] 指摘された問題（並行性、エラーハンドリング、メモリリーク等）を修正
 - [x] 必要に応じて修正後に再レビュー実施
@@ -105,7 +105,7 @@ Whisper.cppを使った高速ローカルSTTアプリケーションを、4週�
 - [x] 録音データ（PCM形式）が取得できる
 
 **CodeRabbitレビュー:**
-- [x] `coderabbit --prompt-only` をバックグラウンドで実行
+- [x] `coderabbit review --prompt-only` をバックグラウンドで実行
 - [x] レビュー結果を確認し、指摘事項をリスト化
 - [x] 指摘された問題を修正
 - [x] 必要に応じて修正後に再レビュー実施
@@ -126,7 +126,7 @@ Whisper.cppを使った高速ローカルSTTアプリケーションを、4週�
 - [x] 60秒で自動停止
 
 **CodeRabbitレビュー:**
-- [x] `coderabbit --prompt-only` をバックグラウンドで実行
+- [x] `coderabbit review --prompt-only` をバックグラウンドで実行
 - [x] レビュー結果を確認し、指摘事項をリスト化
 - [x] 指摘された問題を修正
 - [x] 必要に応じて修正後に再レビュー実施
@@ -147,14 +147,14 @@ Whisper.cppを使った高速ローカルSTTアプリケーションを、4週�
 ### Week 2: 音声認識とテキスト出力
 
 #### 2.6. Whisper.cpp統合（`internal/recognition/`）
-- [ ] Whisper.cpp Go bindingsのセットアップ
+- [x] Whisper.cpp Go bindingsのセットアップ
   ```bash
   # Whisper.cppのクローンとビルド
   git clone https://github.com/ggerganov/whisper.cpp.git
   cd whisper.cpp
   make
   ```
-- [ ] CGOを使ったWhisper関数の呼び出し
+- [x] CGOを使ったWhisper関数の呼び出し
   ```go
   /*
   #cgo CFLAGS: -I/path/to/whisper.cpp
@@ -163,38 +163,38 @@ Whisper.cppを使った高速ローカルSTTアプリケーションを、4週�
   */
   import "C"
   ```
-- [ ] モデルロード機能
-  - [ ] モデルパスの指定
-  - [ ] モデルキャッシュ（起動時に1回だけロード）
-- [ ] 文字起こし実行
-  - [ ] `task=transcribe`（ASR専用）
-  - [ ] 言語設定（デフォルト: ja）
-  - [ ] PCM音声データを渡す
-- [ ] 結果の取得（テキスト形式）
+- [x] モデルロード機能
+  - [x] モデルパスの指定
+  - [x] モデルキャッシュ（起動時に1回だけロード）
+- [x] 文字起こし実行
+  - [x] `task=transcribe`（ASR専用）
+  - [x] 言語設定（デフォルト: ja）
+  - [x] PCM音声データを渡す
+- [x] 結果の取得（テキスト形式）
 
 **モデル管理:**
-- [ ] 既定モデル: `ggml-large-v3-turbo-q5_0.gguf`
-- [ ] モデル配置先: `~/Library/Application Support/EzS2T-Whisper/models/`
-- [ ] モデルの自動検出と選択
+- [x] 既定モデル: `ggml-large-v3-turbo-q5_0.gguf`
+- [x] モデル配置先: `~/Library/Application Support/EzS2T-Whisper/models/`
+- [x] モデルの自動検出と選択
 
 **テスト項目:**
-- [ ] モデルが正しくロードされる
-- [ ] 10秒の日本語音声で文字起こしが完了する
-- [ ] 句読点が適切に挿入される
-- [ ] RTF < 1.0（Apple Silicon M1+）
+- [x] モデルが正しくロードされる
+- [x] 10秒の日本語音声で文字起こしが完了する
+- [x] 句読点が適切に挿入される
+- [x] RTF < 1.0（Apple Silicon M1+）
 
 **CodeRabbitレビュー:**
-- [ ] `coderabbit --prompt-only` をバックグラウンドで実行
-- [ ] レビュー結果を確認し、指摘事項をリスト化
-- [ ] 指摘された問題（CGO連携、メモリ管理等）を修正
-- [ ] 必要に応じて修正後に再レビュー実施
+- [x] `coderabbit review --prompt-only` をバックグラウンドで実行
+- [x] レビュー結果を確認し、指摘事項をリスト化
+- [x] 指摘された問題（CGO連携、メモリ管理等）を修正
+- [x] 必要に応じて修正後に再レビュー実施
 
 #### 2.7. クリップボード安全挿入（`internal/clipboard/`）
-- [ ] robotgoの統合
+- [x] robotgoの統合
   ```bash
   go get github.com/go-vgo/robotgo
   ```
-- [ ] changeCount方式の実装
+- [x] changeCount方式の実装
   ```go
   type ClipboardManager struct {
       savedCount    int
@@ -224,39 +224,39 @@ Whisper.cppを使った高速ローカルSTTアプリケーションを、4週�
       return nil
   }
   ```
-- [ ] macOS NSPasteboard CGO連携
+- [x] macOS NSPasteboard CGO連携
   ```objc
   // changeCountの取得（Objective-C）
   NSInteger changeCount = [[NSPasteboard generalPasteboard] changeCount];
   ```
 
 **長文対策:**
-- [ ] 文字列の分割（500文字単位）
-- [ ] 改行単位での分割オプション
-- [ ] 分割間隔の設定（デフォルト: 50ms）
+- [x] 文字列の分割（500文字単位）
+- [x] 改行単位での分割オプション
+- [x] 分割間隔の設定（デフォルト: 50ms）
 
 **テスト項目:**
-- [ ] テキストが正しく貼り付けられる
-- [ ] 元のクリップボード内容が復元される
-- [ ] ユーザーが介入した場合は復元しない
-- [ ] 長文が正しく分割される
+- [x] テキストが正しく貼り付けられる
+- [x] 元のクリップボード内容が復元される
+- [x] ユーザーが介入した場合は復元しない
+- [x] 長文が正しく分割される
 
 **CodeRabbitレビュー:**
-- [ ] `coderabbit --prompt-only` をバックグラウンドで実行
-- [ ] レビュー結果を確認し、指摘事項をリスト化
-- [ ] 指摘された問題（changeCount方式、CGO連携等）を修正
-- [ ] 必要に応じて修正後に再レビュー実施
+- [x] `coderabbit review --prompt-only` をバックグラウンドで実行
+- [x] レビュー結果を確認し、指摘事項をリスト化
+- [x] 指摘された問題（changeCount方式、CGO連携等）を修正
+- [x] 必要に応じて修正後に再レビュー実施
 
 #### 2.8. メインフロー統合（`cmd/ezs2t-whisper/main.go`）
-- [ ] アプリケーションのライフサイクル管理
-- [ ] 各パッケージの初期化
-- [ ] ゴルーチンでの並行処理
-  - [ ] ホットキー監視
-  - [ ] 録音処理
-  - [ ] 文字起こし処理
-  - [ ] クリップボード挿入
-- [ ] エラーハンドリング
-- [ ] グレースフルシャットダウン
+- [x] アプリケーションのライフサイクル管理
+- [x] 各パッケージの初期化
+- [x] ゴルーチンでの並行処理
+  - [x] ホットキー監視
+  - [x] 録音処理
+  - [x] 文字起こし処理
+  - [x] クリップボード挿入
+- [x] エラーハンドリング
+- [x] グレースフルシャットダウン
 
 **データフロー:**
 ```
@@ -272,10 +272,10 @@ Text Pasted into Active Application
 ```
 
 **Week 2 実装完了基準:**
-- [ ] 全パッケージ（recognition, clipboard, cmd/ezs2t-whisper）のユニットテストがPASS
-- [ ] CodeRabbitレビューで指摘された問題が全て修正済み
-- [ ] `go build ./cmd/ezs2t-whisper` が成功する
-- [ ] Whisper.cppとのCGO連携が正常に機能する
+- [x] 全パッケージ（recognition, clipboard, cmd/ezs2t-whisper）のユニットテストがPASS
+- [x] CodeRabbitレビューで指摘された問題が全て修正済み
+- [x] `go build ./cmd/ezs2t-whisper` が成功する
+- [x] Whisper.cppとのCGO連携が正常に機能する
 
 ---
 
@@ -305,7 +305,7 @@ Text Pasted into Active Application
 - [x] 録音中にアイコンが変化する
 
 **CodeRabbitレビュー:**
-- [x] `coderabbit --prompt-only` をバックグラウンドで実行
+- [x] `coderabbit review --prompt-only` をバックグラウンドで実行
 - [x] レビュー結果を確認し、指摘事項をリスト化
 - [x] 指摘された問題を修正
 - [x] 必要に応じて修正後に再レビュー実施
@@ -409,7 +409,7 @@ Text Pasted into Active Application
 - [x] バリデーションが機能する
 
 **CodeRabbitレビュー:**
-- [x] `coderabbit --prompt-only` をバックグラウンドで実行
+- [x] `coderabbit review --prompt-only` をバックグラウンドで実行
 - [x] レビュー結果を確認し、指摘事項をリスト化
 - [x] 指摘された問題（API設計、エラーハンドリング等）を修正
 - [x] 必要に応じて修正後に再レビュー実施
@@ -484,7 +484,7 @@ Text Pasted into Active Application
 - [x] 不正な設定でもクラッシュしない
 
 **CodeRabbitレビュー:**
-- [x] `coderabbit --prompt-only` をバックグラウンドで実行
+- [x] `coderabbit review --prompt-only` をバックグラウンドで実行
 - [x] レビュー結果を確認し、指摘事項をリスト化
 - [x] 指摘された問題を修正
 - [x] 必要に応じて修正後に再レビュー実施
@@ -515,7 +515,7 @@ Text Pasted into Active Application
 - [ ] システム設定へのリンクが機能する
 
 **CodeRabbitレビュー:**
-- [ ] `coderabbit --prompt-only` をバックグラウンドで実行
+- [ ] `coderabbit review --prompt-only` をバックグラウンドで実行
 - [ ] レビュー結果を確認し、指摘事項をリスト化
 - [ ] 指摘された問題（CGO連携、エラーハンドリング等）を修正
 - [ ] 必要に応じて修正後に再レビュー実施
