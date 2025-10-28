@@ -1,5 +1,35 @@
+# macOS
 .DS_Store
-.claude
-*.code-workspace
-specs
+
+# Build artifacts
+ezs2t-whisper
+/cmd/ezs2t-whisper/ezs2t-whisper
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# Whisper models (large files)
+*.gguf
+
+# Application data
+config.json
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local configuration (user-specific)
 CLAUDE.md
+.claude/
+specs
