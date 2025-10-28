@@ -2,7 +2,7 @@
 .DS_Store
 
 # Build artifacts
-ezs2t-whisper
+/ezs2t-whisper
 /cmd/ezs2t-whisper/ezs2t-whisper
 
 # Go
@@ -14,6 +14,9 @@ ezs2t-whisper
 *.test
 *.out
 go.work
+
+# Whisper.cpp (クローンしたリポジトリ)
+whisper.cpp/
 
 # Whisper models (large files)
 *.gguf
