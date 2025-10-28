@@ -199,7 +199,7 @@ func main() {
 	if hotkeyAvailable {
 		fmt.Printf("ホットキーを押すと録音が開始されます\n")
 	}
-	fmt.Println("Ctrl+C で終了します\n")
+	fmt.Println("Ctrl+C で終了します")
 
 	// ホットキーが利用不可の場合は待機モード
 	if !hotkeyAvailable {
