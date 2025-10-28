@@ -490,38 +490,38 @@ Text Pasted into Active Application
 - [x] 必要に応じて修正後に再レビュー実施
 
 #### 2.14. 権限チェック（`internal/permissions/`）
-- [ ] マイク権限のチェック（CGO経由）
+- [x] マイク権限のチェック（CGO経由）
   ```objc
   // Objective-C
   AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
   ```
-- [ ] アクセシビリティ権限のチェック
+- [x] アクセシビリティ権限のチェック
   ```objc
   // Objective-C
   NSDictionary *options = @{(__bridge id)kAXTrustedCheckOptionPrompt: @YES};
   Boolean isAccessibilityEnabled = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
   ```
-- [ ] 権限未付与時の機能無効化
-- [ ] システム環境設定への誘導リンク
+- [x] 権限未付与時の機能無効化
+- [x] システム環境設定への誘導リンク
   ```go
   // システム設定を開く
   exec.Command("open", "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone").Run()
   ```
-- [ ] 定期的な権限チェック（ポーリング）
+- [x] 定期的な権限チェック（ポーリング）
 
 **テスト項目:**
-- [ ] 権限状態が正しく取得される
-- [ ] 未付与時に適切な警告が表示される
-- [ ] システム設定へのリンクが機能する
+- [x] 権限状態が正しく取得される
+- [x] 未付与時に適切な警告が表示される
+- [x] システム設定へのリンクが機能する
 
 **CodeRabbitレビュー:**
-- [ ] `coderabbit review --prompt-only` をバックグラウンドで実行
-- [ ] レビュー結果を確認し、指摘事項をリスト化
-- [ ] 指摘された問題（CGO連携、エラーハンドリング等）を修正
-- [ ] 必要に応じて修正後に再レビュー実施
+- [x] `coderabbit review --prompt-only` をバックグラウンドで実行
+- [x] レビュー結果を確認し、指摘事項をリスト化
+- [x] 指摘された問題（CGO連携、エラーハンドリング等）を修正
+- [x] 必要に応じて修正後に再レビュー実施
 
 #### 2.15. 多言語対応（`internal/i18n/`）
-- [ ] 文言IDベースの辞書管理
+- [x] 文言IDベースの辞書管理
   ```json
   {
     "menu.settings": "設定を開く...",
@@ -529,77 +529,77 @@ Text Pasted into Active Application
     "error.mic_permission_denied": "マイクへのアクセスが拒否されました"
   }
   ```
-- [ ] OS言語の自動検出
-- [ ] 手動言語切り替え
-- [ ] メニューバー項目のローカライズ
-- [ ] 通知メッセージのローカライズ
+- [x] OS言語の自動検出
+- [x] 手動言語切り替え
+- [x] メニューバー項目のローカライズ
+- [x] 通知メッセージのローカライズ
 
 **テスト項目:**
-- [ ] 日本語環境で日本語表示
-- [ ] 英語環境で英語表示
-- [ ] 手動切り替えが動作する
+- [x] 日本語環境で日本語表示
+- [x] 英語環境で英語表示
+- [x] 手動切り替えが動作する
 
 #### 2.16. 初回セットアップウィザード
-- [ ] 初回起動検出
-- [ ] ウィザード画面の表示（Web UI）
+- [x] 初回起動検出
+- [x] ウィザード画面の表示（Web UI）
   1. ようこそ画面
   2. 権限設定ガイド
   3. モデル選択
   4. ホットキー設定
   5. 完了・録音テスト
-- [ ] セットアップ完了フラグの保存
+- [x] セットアップ完了フラグの保存
 
 **テスト項目:**
-- [ ] 初回起動時にウィザードが表示される
-- [ ] ウィザードの全ステップが完了できる
-- [ ] 2回目以降はウィザードが表示されない
+- [x] 初回起動時にウィザードが表示される
+- [x] ウィザードの全ステップが完了できる
+- [x] 2回目以降はウィザードが表示されない
 
 #### 2.17. エラーハンドリングと通知
-- [ ] macOS通知センターへの通知
+- [x] macOS通知センターへの通知
   ```go
   exec.Command("osascript", "-e",
     `display notification "文字起こしが完了しました" with title "EzS2T-Whisper"`).Run()
   ```
-- [ ] エラー時の通知
-- [ ] 録音時間超過の通知
-- [ ] 権限エラーの通知
+- [x] エラー時の通知
+- [x] 録音時間超過の通知
+- [x] 権限エラーの通知
 
 **テスト項目:**
-- [ ] 各種通知が正しく表示される
-- [ ] エラー時に適切な通知が出る
+- [x] 各種通知が正しく表示される
+- [x] エラー時に適切な通知が出る
 
 #### 2.18. ビルドとパッケージング
-- [ ] ビルドスクリプトの作成
+- [x] ビルドスクリプトの作成
   ```bash
   #!/bin/bash
   # build.sh
   go build -ldflags="-s -w" -o ezs2t-whisper cmd/ezs2t-whisper/main.go
   ```
-- [ ] リリースビルドの最適化
-- [ ] バイナリサイズの確認
-- [ ] 依存関係の確認
+- [x] リリースビルドの最適化
+- [x] バイナリサイズの確認
+- [x] 依存関係の確認
 
 **テスト項目:**
-- [ ] ビルドが成功する
-- [ ] バイナリが実行できる
-- [ ] 依存ライブラリが正しくリンクされる
+- [x] ビルドが成功する
+- [x] バイナリが実行できる
+- [x] 依存ライブラリが正しくリンクされる
 
 #### 2.19. ドキュメント整備
-- [ ] `README.md`の完成
-  - [ ] プロジェクト概要
-  - [ ] インストール手順
-  - [ ] ビルド手順
-  - [ ] 使い方
-  - [ ] トラブルシューティング
-  - [ ] ライセンス情報
-- [ ] `CONTRIBUTING.md`の作成（任意）
-- [ ] `CHANGELOG.md`の作成
+- [x] `README.md`の完成
+  - [x] プロジェクト概要
+  - [x] インストール手順
+  - [x] ビルド手順
+  - [x] 使い方
+  - [x] トラブルシューティング
+  - [x] ライセンス情報
+- [x] `CONTRIBUTING.md`の作成（任意）
+- [x] `CHANGELOG.md`の作成
 
 **Week 4 実装完了基準:**
-- [ ] 全パッケージ（config, permissions, i18n）のユニットテストがPASS
-- [ ] CodeRabbitレビューで指摘された問題が全て修正済み
-- [ ] `go build ./cmd/ezs2t-whisper` が成功する
-- [ ] ドキュメント（README.md, CHANGELOG.md）が整備されている
+- [x] 全パッケージ（config, permissions, i18n）のユニットテストがPASS
+- [x] CodeRabbitレビューで指摘された問題が全て修正済み
+- [x] `go build ./cmd/ezs2t-whisper` が成功する
+- [x] ドキュメント（README.md, CHANGELOG.md）が整備されている
 
 ---
 

@@ -33,6 +33,4 @@ config.json
 *~
 
 # Local configuration (user-specific)
-CLAUDE.md
 .claude/
-specs
