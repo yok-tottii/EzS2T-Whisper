@@ -5,6 +5,8 @@ package recognition
 #cgo LDFLAGS: -L${SRCDIR}/../../whisper.cpp/build/src -L${SRCDIR}/../../whisper.cpp/build/ggml/src -lwhisper -lggml -lm -Wl,-rpath,${SRCDIR}/../../whisper.cpp/build/src -Wl,-rpath,${SRCDIR}/../../whisper.cpp/build/ggml/src
 #include "whisper.h"
 #include <stdlib.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 */
 import "C"
 import (

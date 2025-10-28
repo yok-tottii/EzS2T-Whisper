@@ -197,7 +197,6 @@ func (l *Logger) checkRotation() {
 func (l *Logger) Debug(format string, v ...interface{}) {
 	l.mu.RLock()
 	level := l.level
-	debugLog := l.debugLog
 	l.mu.RUnlock()
 
 	if level <= DEBUG {
@@ -215,7 +214,6 @@ func (l *Logger) Debug(format string, v ...interface{}) {
 func (l *Logger) Info(format string, v ...interface{}) {
 	l.mu.RLock()
 	level := l.level
-	infoLog := l.infoLog
 	l.mu.RUnlock()
 
 	if level <= INFO {
@@ -233,7 +231,6 @@ func (l *Logger) Info(format string, v ...interface{}) {
 func (l *Logger) Warn(format string, v ...interface{}) {
 	l.mu.RLock()
 	level := l.level
-	warnLog := l.warnLog
 	l.mu.RUnlock()
 
 	if level <= WARN {
@@ -251,7 +248,6 @@ func (l *Logger) Warn(format string, v ...interface{}) {
 func (l *Logger) Error(format string, v ...interface{}) {
 	l.mu.RLock()
 	level := l.level
-	errorLog := l.errorLog
 	l.mu.RUnlock()
 
 	if level <= ERROR {
