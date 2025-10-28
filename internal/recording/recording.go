@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/YOURUSERNAME/EzS2T-Whisper/internal/audio"
-	"github.com/YOURUSERNAME/EzS2T-Whisper/internal/hotkey"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/audio"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/hotkey"
 )
 
 // State represents the current recording state

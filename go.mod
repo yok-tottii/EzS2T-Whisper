@@ -1,4 +1,4 @@
-module github.com/YOURUSERNAME/EzS2T-Whisper
+module github.com/yok-tottii/EzS2T-Whisper
 
 go 1.25.1
 

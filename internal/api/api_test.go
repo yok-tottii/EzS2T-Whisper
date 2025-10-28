@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/YOURUSERNAME/EzS2T-Whisper/internal/config"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/config"
 )
 
 func TestNew(t *testing.T) {

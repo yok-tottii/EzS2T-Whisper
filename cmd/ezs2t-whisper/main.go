@@ -9,11 +9,11 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/YOURUSERNAME/EzS2T-Whisper/internal/audio"
-	"github.com/YOURUSERNAME/EzS2T-Whisper/internal/clipboard"
-	"github.com/YOURUSERNAME/EzS2T-Whisper/internal/hotkey"
-	"github.com/YOURUSERNAME/EzS2T-Whisper/internal/logger"
-	"github.com/YOURUSERNAME/EzS2T-Whisper/internal/recognition"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/audio"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/clipboard"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/hotkey"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/logger"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/recognition"
 	hk "golang.design/x/hotkey"
 )
 
