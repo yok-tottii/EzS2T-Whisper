@@ -3,21 +3,45 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
-	"path/filepath"
+	"os/exec"
 	"runtime"
-	"syscall"
+	"time"
 
+	"github.com/yok-tottii/EzS2T-Whisper/internal/api"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/audio"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/clipboard"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/config"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/hotkey"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/logger"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/permissions"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/recognition"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/server"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/tray"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/wizard"
 	hk "golang.design/x/hotkey"
 )
+
+const version = "0.2.0"
+
+// App holds all application state
+type App struct {
+	logger      *logger.Logger
+	config      *config.Config
+	trayMgr     *tray.Manager
+	httpServer  *server.Server
+	apiHandler  *api.Handler
+	hotkeyMgr   *hotkey.Manager
+	audioDriver audio.AudioDriver
+	audioConfig audio.Config
+	recognizer  *recognition.WhisperRecognizer
+	clipboard   *clipboard.Manager
+	wizard      *wizard.SetupWizard
+
+	micGranted  bool
+	accGranted  bool
+	modelLoaded bool
+	isFirstRun  bool
+}
 
 func init() {
 	// macOSのCGO呼び出しにはメインスレッドが必要
@@ -25,139 +49,134 @@ func init() {
 }
 
 func main() {
-	fmt.Println("EzS2T-Whisper v0.2.0 (Week 4 完成版)")
-	fmt.Println("=========================================")
+	app := &App{}
 
 	// ロガーの初期化
 	loggerConfig := logger.DefaultConfig()
-	appLogger, err := logger.New(loggerConfig)
+	var err error
+	app.logger, err = logger.New(loggerConfig)
 	if err != nil {
 		log.Fatalf("ロガーの初期化に失敗: %v", err)
 	}
-	defer appLogger.Close()
+	defer app.logger.Close()
 
-	appLogger.Info("EzS2T-Whisper起動")
+	app.logger.Info("EzS2T-Whisper v%s 起動", version)
+
+	// 設定ファイルの読み込み
+	configPath := config.GetConfigPath()
+	app.config, err = config.Load(configPath)
+	if err != nil {
+		app.logger.Error("設定ファイルの読み込みに失敗: %v", err)
+		log.Fatalf("設定ファイルの読み込みに失敗: %v", err)
+	}
+	app.logger.Info("設定ファイルを読み込みました: %s", configPath)
 
 	// セットアップウィザード初期化
-	setupWizard, err := wizard.NewSetupWizard()
+	app.wizard, err = wizard.NewSetupWizard()
 	if err != nil {
-		appLogger.Error("セットアップウィザード初期化エラー: %v", err)
-		fmt.Printf("[エラー] セットアップウィザード初期化に失敗: %v\n", err)
+		app.logger.Error("セットアップウィザード初期化エラー: %v", err)
 	}
 
 	// 初回起動判定
-	isFirstRun := setupWizard != nil && setupWizard.ShouldShowWizard()
-	if isFirstRun {
-		fmt.Println("\n=== 初回セットアップ ===")
-		fmt.Println("このアプリケーションを初めて使用しています。")
-		fmt.Println("以下の権限が必要です：")
-		fmt.Println("  1. マイク: 音声を録音するため")
-		fmt.Println("  2. アクセシビリティ: ホットキー登録と文字貼り付けのため")
-		fmt.Println("\nシステム設定で以下の手順で許可してください：")
-		fmt.Println("  → プライバシーとセキュリティ > マイク")
-		fmt.Println("  → プライバシーとセキュリティ > アクセシビリティ")
-		fmt.Println("")
-	}
+	app.isFirstRun = app.wizard != nil && app.wizard.ShouldShowWizard()
+
+	// Clipboard Managerの初期化
+	app.clipboard = clipboard.NewManager(clipboard.DefaultConfig())
+	app.logger.Info("Clipboard Manager初期化完了")
+
+	// Whisper Recognizerの初期化
+	app.recognizer = recognition.NewWhisperRecognizer(recognition.DefaultConfig())
+	defer app.recognizer.Close()
+
+	// HTTPサーバーの初期化
+	app.httpServer = server.New(server.DefaultConfig())
+	app.apiHandler = api.New(app.config, app.wizard)
+
+	// APIルートを登録
+	app.apiHandler.RegisterRoutes(app.httpServer.GetMux())
+	app.logger.Info("APIルート登録完了")
+
+	// システムトレイマネージャーの作成
+	app.trayMgr = tray.NewManager(tray.Config{
+		OnReady:        app.onReady,
+		OnSettings:     app.handleOpenSettings,
+		OnRescanModels: app.handleRescanModels,
+		OnRecordTest:   app.handleRecordTest,
+		OnAbout:        app.handleAbout,
+		OnQuit:         app.handleQuit,
+	})
+
+	app.logger.Info("systray初期化開始")
+
+	// systray.Run()を呼び出し - これはブロッキング呼び出し
+	app.trayMgr.Run()
+}
+
+// onReady は systray が初期化完了後に呼ばれる
+func (a *App) onReady() {
+	a.logger.Info("systray初期化完了 - アプリケーション初期化開始")
 
 	// 権限チェック
 	permChecker := permissions.NewPermissionChecker()
 	perms := permChecker.CheckAllPermissions()
 
-	// 権限状態の表示
-	micGranted := perms["microphone"]
-	accGranted := perms["accessibility"]
+	a.micGranted = perms["microphone"]
+	a.accGranted = perms["accessibility"]
 
-	fmt.Println("=== 権限状態 ===")
-	if micGranted {
-		fmt.Println("✅ マイク: 許可済み")
-		appLogger.Info("マイク権限: OK")
+	if a.micGranted {
+		a.logger.Info("マイク権限: 許可済み")
 	} else {
-		fmt.Println("❌ マイク: 未許可")
-		fmt.Println("  → システム設定で許可してください")
-		appLogger.Warn("マイク権限: 未許可 - 録音機能が無効化されます")
+		a.logger.Warn("マイク権限: 未許可 - 録音機能が無効化されます")
+		a.trayMgr.ShowError("マイク権限が未許可です。システム設定で許可してください。")
 	}
 
-	if accGranted {
-		fmt.Println("✅ アクセシビリティ: 許可済み")
-		appLogger.Info("アクセシビリティ権限: OK")
+	if a.accGranted {
+		a.logger.Info("アクセシビリティ権限: 許可済み")
 	} else {
-		fmt.Println("❌ アクセシビリティ: 未許可")
-		fmt.Println("  → システム設定で許可してください")
-		appLogger.Warn("アクセシビリティ権限: 未許可 - ホットキーと貼り付け機能が無効化されます")
+		a.logger.Warn("アクセシビリティ権限: 未許可 - ホットキーと貼り付け機能が無効化されます")
+		a.trayMgr.ShowError("アクセシビリティ権限が未許可です。システム設定で許可してください。")
 	}
-	fmt.Println("")
 
-	// Whisper Recognizerの初期化（常に初期化）
-	recognizer := recognition.NewWhisperRecognizer(recognition.DefaultConfig())
-	defer recognizer.Close()
-
-	// モデルパスの設定
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		appLogger.Error("ホームディレクトリの取得に失敗: %v", err)
-		fmt.Printf("[エラー] ホームディレクトリが取得できません\n")
-		return
-	}
-	modelPath := filepath.Join(homeDir, "Library", "Application Support", "EzS2T-Whisper", "models", "ggml-large-v3-turbo-q5_0.gguf")
-
-	// モデルのロード（モデルが存在する場合のみ）
-	modelLoaded := false
-	if _, err := os.Stat(modelPath); err == nil {
-		fmt.Printf("モデルをロード中: %s\n", modelPath)
-		if err := recognizer.LoadModel(modelPath); err != nil {
-			appLogger.Warn("モデルのロードに失敗（スキップ）: %v", err)
-			fmt.Printf("[警告] モデルのロードに失敗: %v\n", err)
-			fmt.Println("  → 録音データの文字起こしはスキップされます")
+	// モデルのロード（モデルパスが設定されている場合）
+	if a.config.ModelPath != "" {
+		modelPath, err := a.config.GetModelPath()
+		if err != nil {
+			a.logger.Error("モデルパスの展開に失敗: %v", err)
+		} else if err := a.config.ValidateModelPath(); err != nil {
+			a.logger.Warn("モデルパスの検証に失敗: %v", err)
 		} else {
-			appLogger.Info("モデルロード完了")
-			fmt.Println("✅ モデルロード完了")
-			modelLoaded = true
+			a.logger.Info("モデルをロード中: %s", modelPath)
+			if err := a.recognizer.LoadModel(modelPath); err != nil {
+				a.logger.Warn("モデルのロードに失敗: %v", err)
+				a.trayMgr.ShowError(fmt.Sprintf("モデルのロードに失敗: %v", err))
+			} else {
+				a.logger.Info("モデルロード完了")
+				a.modelLoaded = true
+			}
 		}
 	} else {
-		appLogger.Warn("モデルファイルが見つかりません: %s", modelPath)
-		fmt.Printf("[警告] モデルファイルが見つかりません\n")
-		fmt.Printf("  → 配置先: %s\n", modelPath)
-		fmt.Println("  → モデルをダウンロードして配置してください")
-		fmt.Println("  → 録音データの文字起こしはスキップされます")
+		a.logger.Warn("モデルパスが設定されていません")
 	}
-	fmt.Println("")
-
-	// Clipboard Managerの初期化
-	clipboardManager := clipboard.NewManager(clipboard.DefaultConfig())
-	appLogger.Info("Clipboard Manager初期化完了")
 
 	// オーディオドライバの初期化（マイク権限がある場合のみ）
-	var audioDriver audio.AudioDriver
-	var audioConfig audio.Config
-	audioAvailable := false
-
-	if micGranted {
-		audioDriver, err = audio.NewPortAudioDriver()
+	if a.micGranted {
+		var err error
+		a.audioDriver, err = audio.NewPortAudioDriver()
 		if err != nil {
-			appLogger.Error("PortAudioドライバの作成に失敗: %v", err)
-			fmt.Printf("[警告] オーディオドライバの初期化に失敗: %v\n", err)
+			a.logger.Error("PortAudioドライバの作成に失敗: %v", err)
 		} else {
-			defer audioDriver.Close()
-			audioConfig = audio.DefaultConfig()
-			if err := audioDriver.Initialize(audioConfig); err != nil {
-				appLogger.Error("オーディオドライバの初期化に失敗: %v", err)
-				fmt.Printf("[警告] オーディオドライバの初期化に失敗: %v\n", err)
+			a.audioConfig = audio.DefaultConfig()
+			if err := a.audioDriver.Initialize(a.audioConfig); err != nil {
+				a.logger.Error("オーディオドライバの初期化に失敗: %v", err)
 			} else {
-				appLogger.Info("オーディオドライバ初期化完了")
-				audioAvailable = true
-				fmt.Println("✅ オーディオドライバ初期化完了")
+				a.logger.Info("オーディオドライバ初期化完了")
 			}
 		}
 	}
 
 	// ホットキーマネージャーの初期化（アクセシビリティ権限がある場合のみ）
-	var hotkeyManager *hotkey.Manager
-	var hotkeyFormatted string
-	hotkeyAvailable := false
-
-	if accGranted {
-		hotkeyManager = hotkey.New()
-		defer hotkeyManager.Close()
+	if a.accGranted {
+		a.hotkeyMgr = hotkey.New()
 
 		// ホットキーの設定（Ctrl+Option+Space）
 		hotkeyConfig := hotkey.Config{
@@ -167,158 +186,304 @@ func main() {
 		}
 
 		// ホットキーの登録
-		if err := hotkeyManager.Register(hotkeyConfig); err != nil {
-			appLogger.Error("ホットキーの登録に失敗: %v", err)
-			fmt.Printf("[警告] ホットキーの登録に失敗: %v\n", err)
+		if err := a.hotkeyMgr.Register(hotkeyConfig); err != nil {
+			a.logger.Error("ホットキーの登録に失敗: %v", err)
+			a.trayMgr.ShowError(fmt.Sprintf("ホットキーの登録に失敗: %v", err))
 		} else {
-			hotkeyFormatted = hotkey.FormatHotkey(hotkeyConfig.Modifiers, hotkeyConfig.Key)
-			appLogger.Info("ホットキー登録完了: %s", hotkeyFormatted)
-			fmt.Printf("✅ ホットキー: %s\n", hotkeyFormatted)
-			hotkeyAvailable = true
+			hotkeyFormatted := hotkey.FormatHotkey(hotkeyConfig.Modifiers, hotkeyConfig.Key)
+			a.logger.Info("ホットキー登録完了: %s", hotkeyFormatted)
+
+			// ホットキーイベントループを開始
+			go a.hotkeyEventLoop()
 		}
 	}
 
-	// 必要な権限がない場合の警告
-	if !audioAvailable && !hotkeyAvailable {
-		fmt.Println("\n[エラー] 必要な権限がありません。アプリケーションを終了します。")
-		fmt.Println("システム設定で以下の権限を許可してください：")
-		fmt.Println("  → プライバシーとセキュリティ > マイク")
-		fmt.Println("  → プライバシーとセキュリティ > アクセシビリティ")
-		appLogger.Error("必要な権限なし - 終了")
-		return
+	// 初回起動時は自動的にセットアップ画面を開く
+	if a.isFirstRun && a.wizard != nil {
+		a.logger.Info("初回起動検出 - セットアップ画面を開きます")
+		a.handleOpenSettings()
+		// MarkSetupCompleted()はAPIハンドラで設定保存時に呼ばれる
 	}
 
-	// 初回起動フラグを設定
-	if isFirstRun && setupWizard != nil {
-		if err := setupWizard.MarkSetupCompleted(); err != nil {
-			appLogger.Error("セットアップ完了フラグの設定に失敗: %v", err)
+	a.logger.Info("アプリケーション初期化完了")
+
+	// ターミナルに設定画面URLを常に表示
+	fmt.Println("\n" + "==========================================================")
+	fmt.Println("✅ EzS2T-Whisper が起動しました")
+	fmt.Println("==========================================================")
+	fmt.Printf("📝 設定画面URL: http://127.0.0.1:18765\n")
+	fmt.Printf("🎤 メニューバーのアイコン（🎤）をクリックしてメニューを開けます\n")
+	fmt.Printf("⌨️  ホットキー: Ctrl+Option+Space\n")
+	fmt.Printf("🛑 終了: Ctrl+C またはメニューから「終了」\n")
+	fmt.Println("==========================================================" + "\n")
+}
+
+// hotkeyEventLoop はホットキーイベントを処理するループ
+func (a *App) hotkeyEventLoop() {
+	a.logger.Info("ホットキーイベントループ開始")
+
+	eventChan := a.hotkeyMgr.Events()
+
+	for event := range eventChan {
+		switch event.Type {
+		case hotkey.Pressed:
+			if !a.micGranted || a.audioDriver == nil {
+				a.logger.Warn("ホットキー押下検出しましたが、マイク権限がないため無視します")
+				continue
+			}
+
+			a.logger.Info("ホットキー押下検出 - 録音開始")
+			a.trayMgr.SetState(tray.StateRecording)
+
+			if err := a.audioDriver.StartRecording(); err != nil {
+				a.logger.Error("録音開始エラー: %v", err)
+				a.trayMgr.ShowError(fmt.Sprintf("録音開始に失敗: %v", err))
+				a.trayMgr.SetState(tray.StateIdle)
+			}
+
+		case hotkey.Released:
+			if !a.micGranted || a.audioDriver == nil {
+				continue
+			}
+
+			a.logger.Info("ホットキー解放検出 - 録音停止")
+			a.trayMgr.SetState(tray.StateProcessing)
+
+			audioData, err := a.audioDriver.StopRecording()
+			if err != nil {
+				a.logger.Error("録音停止エラー: %v", err)
+				a.trayMgr.ShowError(fmt.Sprintf("録音停止に失敗: %v", err))
+				a.trayMgr.SetState(tray.StateIdle)
+				continue
+			}
+
+			dataSize := len(audioData)
+			a.logger.Info("録音データ受信: %d バイト", dataSize)
+
+			// データが空の場合はスキップ
+			if dataSize == 0 {
+				a.logger.Warn("録音データが空です")
+				a.trayMgr.SetState(tray.StateIdle)
+				continue
+			}
+
+			// モデルがない場合はスキップ
+			if !a.modelLoaded {
+				a.logger.Warn("モデル未読み込みのため文字起こしをスキップ")
+				a.trayMgr.ShowError("モデルが読み込まれていません。設定画面でモデルを選択してください。")
+				a.trayMgr.SetState(tray.StateIdle)
+				continue
+			}
+
+			// 文字起こし処理
+			a.logger.Info("文字起こし処理開始")
+
+			transcription, err := a.recognizer.Transcribe(audioData, a.audioConfig.SampleRate)
+			if err != nil {
+				a.logger.Error("文字起こしエラー: %v", err)
+				a.trayMgr.ShowError(fmt.Sprintf("文字起こしに失敗: %v", err))
+				a.trayMgr.SetState(tray.StateIdle)
+				continue
+			}
+
+			a.logger.Info("文字起こし完了: %s", transcription)
+
+			// 文字起こし結果が空の場合はスキップ
+			if transcription == "" {
+				a.logger.Warn("文字起こし結果が空です")
+				a.trayMgr.SetState(tray.StateIdle)
+				continue
+			}
+
+			// クリップボードに貼り付け（アクセシビリティ権限が必要）
+			if !a.accGranted {
+				a.logger.Warn("アクセシビリティ権限なしのため貼り付けをスキップ")
+				a.trayMgr.ShowError("アクセシビリティ権限がありません。システム設定で許可してください。")
+				a.trayMgr.SetState(tray.StateIdle)
+				continue
+			}
+
+			a.logger.Info("クリップボード貼り付け開始")
+
+			if err := a.clipboard.SafePasteWithSplit(transcription); err != nil {
+				a.logger.Error("貼り付けエラー: %v", err)
+				a.trayMgr.ShowError(fmt.Sprintf("貼り付けに失敗: %v", err))
+				a.trayMgr.SetState(tray.StateIdle)
+				continue
+			}
+
+			a.logger.Info("貼り付け完了")
+			a.trayMgr.SetState(tray.StateIdle)
 		}
 	}
 
-	fmt.Println("=" + "=========================================")
-	if hotkeyAvailable {
-		fmt.Printf("ホットキーを押すと録音が開始されます\n")
-	}
-	fmt.Println("Ctrl+C で終了します")
+	a.logger.Info("ホットキーイベントループ終了")
+}
 
-	// ホットキーが利用不可の場合は待機モード
-	if !hotkeyAvailable {
-		fmt.Println("[注意] アクセシビリティ権限がないため、ホットキーは無効化されています。")
-		fmt.Println("システム設定で権限を許可してからアプリケーションを再起動してください。")
-		fmt.Println("Ctrl+C で終了します...")
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-		<-sigChan
-		return
-	}
+// handleOpenSettings は設定画面を開く
+func (a *App) handleOpenSettings() {
+	a.logger.Info("設定画面を開く要求")
 
-	// ホットキーイベントチャネルの取得
-	eventChan := hotkeyManager.Events()
-
-	// シグナルハンドリング
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	// イベントループ
-	for {
-		select {
-		case event, ok := <-eventChan:
-			if !ok {
-				appLogger.Info("ホットキーイベントチャネルがクローズされました")
-				return
-			}
-
-			switch event.Type {
-			case hotkey.Pressed:
-				if !audioAvailable {
-					appLogger.Warn("ホットキー押下検出しましたが、マイク権限がないため無視します")
-					continue
-				}
-
-				fmt.Println("[イベント] ホットキー押下 - 録音開始")
-				appLogger.Info("ホットキー押下検出 - 録音開始")
-				if err := audioDriver.StartRecording(); err != nil {
-					appLogger.Error("録音開始エラー: %v", err)
-					fmt.Printf("[エラー] 録音開始に失敗: %v\n", err)
-				}
-
-			case hotkey.Released:
-				if !audioAvailable {
-					continue
-				}
-
-				fmt.Println("[イベント] ホットキー解放 - 録音停止")
-				appLogger.Info("ホットキー解放検出 - 録音停止")
-				audioData, err := audioDriver.StopRecording()
-				if err != nil {
-					appLogger.Error("録音停止エラー: %v", err)
-					fmt.Printf("[エラー] 録音停止に失敗: %v\n", err)
-					continue
-				}
-
-				dataSize := len(audioData)
-				appLogger.Info("録音データ受信: %d バイト", dataSize)
-				fmt.Printf("[データ] 録音完了: %d バイト受信\n", dataSize)
-
-				// データが空の場合はスキップ
-				if dataSize == 0 {
-					fmt.Println("[警告] 録音データが空です")
-					appLogger.Warn("録音データが空です")
-					continue
-				}
-
-				// モデルがない場合はスキップ
-				if !modelLoaded {
-					fmt.Println("[警告] モデルが読み込まれていないため、文字起こしをスキップします")
-					appLogger.Warn("モデル未読み込みのため文字起こしをスキップ")
-					continue
-				}
-
-				// 文字起こし処理
-				fmt.Println("[処理] 文字起こし中...")
-				appLogger.Info("文字起こし処理開始")
-
-				transcription, err := recognizer.Transcribe(audioData, audioConfig.SampleRate)
-				if err != nil {
-					appLogger.Error("文字起こしエラー: %v", err)
-					fmt.Printf("[エラー] 文字起こしに失敗: %v\n", err)
-					continue
-				}
-
-				appLogger.Info("文字起こし完了: %s", transcription)
-				fmt.Printf("[結果] %s\n", transcription)
-
-				// 文字起こし結果が空の場合はスキップ
-				if transcription == "" {
-					fmt.Println("[警告] 文字起こし結果が空です")
-					appLogger.Warn("文字起こし結果が空です")
-					continue
-				}
-
-				// クリップボードに貼り付け（アクセシビリティ権限が必要）
-				if !accGranted {
-					fmt.Println("[警告] アクセシビリティ権限がないため、テキストを貼り付けられません")
-					appLogger.Warn("アクセシビリティ権限なしのため貼り付けをスキップ")
-					continue
-				}
-
-				fmt.Println("[処理] テキストを貼り付け中...")
-				appLogger.Info("クリップボード貼り付け開始")
-
-				if err := clipboardManager.SafePasteWithSplit(transcription); err != nil {
-					appLogger.Error("貼り付けエラー: %v", err)
-					fmt.Printf("[エラー] 貼り付けに失敗: %v\n", err)
-					continue
-				}
-
-				appLogger.Info("貼り付け完了")
-				fmt.Println("[完了] テキストが貼り付けられました")
-			}
-
-		case <-sigChan:
-			fmt.Println("\n\n終了シグナル受信 - クリーンアップ中...")
-			appLogger.Info("終了シグナル受信")
+	// HTTPサーバーが起動していない場合は起動
+	if !a.httpServer.IsRunning() {
+		if err := a.httpServer.Start(); err != nil {
+			a.logger.Error("HTTPサーバーの起動に失敗: %v", err)
+			a.trayMgr.ShowError(fmt.Sprintf("設定画面の起動に失敗: %v", err))
 			return
 		}
+		a.logger.Info("HTTPサーバー起動完了: %s", a.httpServer.URL())
 	}
+
+	// ブラウザで設定画面を開く
+	url := a.httpServer.URL()
+	a.logger.Info("ブラウザを開きます: %s", url)
+
+	// goroutineで非同期実行
+	go func() {
+		cmd := exec.Command("open", url)
+		if err := cmd.Run(); err != nil {
+			a.logger.Error("ブラウザの起動に失敗: %v", err)
+			a.trayMgr.ShowError(fmt.Sprintf("ブラウザの起動に失敗: %v", err))
+
+			// フォールバック: ターミナルにURLを表示
+			fmt.Printf("\n⚠️  ブラウザが自動で開きませんでした\n")
+			fmt.Printf("📝 設定画面URL: %s\n", url)
+			fmt.Printf("💡 上記URLをブラウザで開いてください\n\n")
+		}
+	}()
+}
+
+// handleRescanModels はモデルディレクトリを再スキャン
+func (a *App) handleRescanModels() {
+	a.logger.Info("モデル再スキャン要求")
+	a.trayMgr.ShowNotification("モデル再スキャン", "モデルディレクトリを再スキャンしています...")
+	// TODO: 実装
+}
+
+// handleRecordTest は録音テストを実行
+func (a *App) handleRecordTest() {
+	a.logger.Info("録音テスト要求")
+
+	// goroutineで非同期実行（UIブロックを防ぐ）
+	go func() {
+		// 1. 権限チェック
+		if !a.micGranted {
+			a.logger.Warn("録音テスト: マイク権限がありません")
+			a.trayMgr.ShowError("マイク権限がありません。システム設定で許可してください。")
+			return
+		}
+
+		if !a.accGranted {
+			a.logger.Warn("録音テスト: アクセシビリティ権限がありません")
+			a.trayMgr.ShowError("アクセシビリティ権限がありません。システム設定で許可してください。")
+			return
+		}
+
+		if a.audioDriver == nil {
+			a.logger.Error("録音テスト: オーディオドライバが初期化されていません")
+			a.trayMgr.ShowError("オーディオドライバの初期化に失敗しています。")
+			return
+		}
+
+		if !a.modelLoaded {
+			a.logger.Warn("録音テスト: モデルが読み込まれていません")
+			a.trayMgr.ShowError("モデルが読み込まれていません。設定画面でモデルを選択してください。")
+			return
+		}
+
+		// 2. 録音開始
+		a.logger.Info("録音テスト: 録音開始（5秒間）")
+		a.trayMgr.ShowNotification("録音テスト", "録音を開始します（5秒間話してください）")
+		a.trayMgr.SetState(tray.StateRecording)
+
+		if err := a.audioDriver.StartRecording(); err != nil {
+			a.logger.Error("録音テスト: 録音開始エラー: %v", err)
+			a.trayMgr.ShowError(fmt.Sprintf("録音開始に失敗: %v", err))
+			a.trayMgr.SetState(tray.StateIdle)
+			return
+		}
+
+		// 3. 5秒間録音
+		time.Sleep(5 * time.Second)
+
+		// 4. 録音停止
+		a.logger.Info("録音テスト: 録音停止")
+		a.trayMgr.SetState(tray.StateProcessing)
+
+		audioData, err := a.audioDriver.StopRecording()
+		if err != nil {
+			a.logger.Error("録音テスト: 録音停止エラー: %v", err)
+			a.trayMgr.ShowError(fmt.Sprintf("録音停止に失敗: %v", err))
+			a.trayMgr.SetState(tray.StateIdle)
+			return
+		}
+
+		dataSize := len(audioData)
+		a.logger.Info("録音テスト: 録音データ受信: %d バイト", dataSize)
+
+		// データが空の場合
+		if dataSize == 0 {
+			a.logger.Warn("録音テスト: 録音データが空です")
+			a.trayMgr.ShowError("録音データが空です。マイクが正しく動作しているか確認してください。")
+			a.trayMgr.SetState(tray.StateIdle)
+			return
+		}
+
+		// 5. 文字起こし処理
+		a.logger.Info("録音テスト: 文字起こし処理開始")
+		a.trayMgr.ShowNotification("録音テスト", "文字起こし処理中...")
+
+		transcription, err := a.recognizer.Transcribe(audioData, a.audioConfig.SampleRate)
+		if err != nil {
+			a.logger.Error("録音テスト: 文字起こしエラー: %v", err)
+			a.trayMgr.ShowError(fmt.Sprintf("文字起こしに失敗: %v", err))
+			a.trayMgr.SetState(tray.StateIdle)
+			return
+		}
+
+		a.logger.Info("録音テスト: 文字起こし完了: %s", transcription)
+
+		// 文字起こし結果が空の場合
+		if transcription == "" {
+			a.logger.Warn("録音テスト: 文字起こし結果が空です")
+			a.trayMgr.ShowError("文字起こし結果が空です。音声が短すぎるか、ノイズが多い可能性があります。")
+			a.trayMgr.SetState(tray.StateIdle)
+			return
+		}
+
+		// 6. 結果を通知
+		a.logger.Info("録音テスト: テスト完了")
+		a.trayMgr.ShowNotification("録音テスト完了", fmt.Sprintf("文字起こし結果:\n%s", transcription))
+		a.trayMgr.SetState(tray.StateIdle)
+	}()
+}
+
+// handleAbout はバージョン情報を表示
+func (a *App) handleAbout() {
+	a.logger.Info("バージョン情報表示要求")
+	a.trayMgr.ShowNotification("EzS2T-Whisper", fmt.Sprintf("Version %s", version))
+}
+
+// handleQuit はアプリケーションを終了
+func (a *App) handleQuit() {
+	a.logger.Info("終了要求")
+
+	// HTTPサーバーを停止
+	if a.httpServer != nil && a.httpServer.IsRunning() {
+		if err := a.httpServer.Stop(); err != nil {
+			a.logger.Error("HTTPサーバーの停止に失敗: %v", err)
+		}
+	}
+
+	// ホットキーマネージャーをクローズ
+	if a.hotkeyMgr != nil {
+		a.hotkeyMgr.Close()
+	}
+
+	// オーディオドライバをクローズ
+	if a.audioDriver != nil {
+		a.audioDriver.Close()
+	}
+
+	a.logger.Info("アプリケーション終了")
 }
