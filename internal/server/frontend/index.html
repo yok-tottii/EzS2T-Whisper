@@ -111,36 +111,36 @@
 </head>
 <body>
     <div class="container">
-        <h1>EzS2T-Whisper 設定</h1>
-        <p class="subtitle">音声文字起こしアプリケーションの設定</p>
+        <h1 data-i18n="page.heading">EzS2T-Whisper 設定</h1>
+        <p class="subtitle" data-i18n="page.subtitle">音声文字起こしアプリケーションの設定</p>
 
         <div class="card">
-            <h2>システム権限</h2>
+            <h2 data-i18n="section.permissions">システム権限</h2>
             <div class="form-group">
-                <label>マイク</label>
-                <span class="status granted" id="mic-status">✓ 許可済み</span>
+                <label data-i18n="label.microphone">マイク</label>
+                <span class="status granted" id="mic-status">✓ <span data-i18n="label.granted">許可済み</span></span>
             </div>
             <div class="form-group">
-                <label>アクセシビリティ</label>
-                <span class="status granted" id="accessibility-status">✓ 許可済み</span>
+                <label data-i18n="label.accessibility">アクセシビリティ</label>
+                <span class="status granted" id="accessibility-status">✓ <span data-i18n="label.granted">許可済み</span></span>
             </div>
         </div>
 
         <div class="card">
-            <h2>ホットキー</h2>
+            <h2 data-i18n="section.hotkey">ホットキー</h2>
             <div class="form-group">
-                <label for="hotkey-display">録音開始キー</label>
+                <label for="hotkey-display" data-i18n="label.hotkey_current">録音開始キー</label>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <input type="text" id="hotkey-display" value="⌃⌥␣" readonly style="flex: 1;">
-                    <button type="button" onclick="openHotkeyEditor()">変更...</button>
+                    <button type="button" onclick="openHotkeyEditor()" data-i18n="button.change">変更...</button>
                 </div>
                 <div id="hotkey-conflict" style="margin-top: 8px; font-size: 12px; color: #d70015; display: none;"></div>
             </div>
             <div class="form-group">
-                <label for="record-mode">録音モード</label>
+                <label for="record-mode" data-i18n="label.record_mode">録音モード</label>
                 <select id="record-mode">
-                    <option value="press-to-hold">押下中録音</option>
-                    <option value="toggle">トグル切替</option>
+                    <option value="press-to-hold" data-i18n="option.press_to_hold">押下中録音</option>
+                    <option value="toggle" data-i18n="option.toggle">トグル切替</option>
                 </select>
             </div>
         </div>
@@ -148,8 +148,8 @@
         <!-- ホットキー編集モーダル -->
         <div id="hotkey-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
             <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%;">
-                <h3>ホットキー設定</h3>
-                <p style="color: #6e6e73; font-size: 14px; margin-bottom: 20px;">
+                <h3 data-i18n="modal.title">ホットキー設定</h3>
+                <p style="color: #6e6e73; font-size: 14px; margin-bottom: 20px;" data-i18n="modal.instruction">
                     入力欄をクリックして、設定したいキーの組み合わせを押してください
                 </p>
 
@@ -160,29 +160,29 @@
                 </div>
 
                 <div id="hotkey-modal-conflict" style="margin-bottom: 15px; padding: 10px; background: #ffe5e5; border-radius: 8px; display: none;">
-                    <strong>⚠️ 競合検出:</strong> <span id="conflict-apps"></span>
+                    <strong>⚠️ <span data-i18n="modal.conflict_warning">競合検出:</span></strong> <span id="conflict-apps"></span>
                 </div>
 
                 <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                    <button onclick="closeHotkeyEditor()" style="background: #6e6e73;">キャンセル</button>
-                    <button onclick="saveHotkey()" id="save-hotkey-btn">保存</button>
+                    <button onclick="closeHotkeyEditor()" style="background: #6e6e73;" data-i18n="modal.button_cancel">キャンセル</button>
+                    <button onclick="saveHotkey()" id="save-hotkey-btn" data-i18n="modal.button_save">保存</button>
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <h2>音声認識</h2>
+            <h2 data-i18n="section.recognition">音声認識</h2>
             <div class="form-group">
-                <label for="model-path">モデルファイル</label>
+                <label for="model-path" data-i18n="label.model_path">モデルファイル</label>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="text" id="model-path" placeholder="モデルファイルのパスを選択または入力してください" style="flex: 1;">
-                    <button type="button" onclick="browseModelFile()" style="padding: 10px 20px;">参照...</button>
+                    <input type="text" id="model-path" style="flex: 1;">
+                    <button type="button" onclick="browseModelFile()" style="padding: 10px 20px;" data-i18n="button.browse">参照...</button>
                 </div>
                 <div id="model-info" style="margin-top: 8px; font-size: 12px; color: #6e6e73;"></div>
                 <div id="model-error" style="margin-top: 8px; font-size: 12px; color: #d70015; display: none;"></div>
             </div>
             <div class="form-group">
-                <label for="language">言語</label>
+                <label for="language" data-i18n="label.language">言語</label>
                 <select id="language">
                     <option value="ja">日本語</option>
                     <option value="en">English</option>
@@ -191,18 +191,25 @@
         </div>
 
         <div class="card">
-            <h2>マイク設定</h2>
+            <h2 data-i18n="section.microphone">マイク設定</h2>
             <div class="form-group">
-                <label for="audio-device">入力デバイス</label>
+                <label for="audio-device" data-i18n="label.audio_device">入力デバイス</label>
                 <select id="audio-device">
-                    <option value="0">システムデフォルト</option>
+                    <option value="0" data-i18n="option.system_default">システムデフォルト</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="ui-language" data-i18n="label.ui_language">UI言語</label>
+                <select id="ui-language" onchange="setLanguage(this.value)">
+                    <option value="ja">日本語</option>
+                    <option value="en">English</option>
                 </select>
             </div>
         </div>
 
-        <button onclick="saveSettings()">設定を保存</button>
+        <button onclick="saveSettings()" data-i18n="button.save">設定を保存</button>
 
-        <div class="footer">
+        <div class="footer" data-i18n="footer">
             EzS2T-Whisper v0.3.0 | オープンソース (MIT License)
         </div>
     </div>
@@ -210,6 +217,134 @@
     <script>
         // API base URL
         const API_BASE = '';
+
+        // i18n translations
+        const translations = {
+            ja: {
+                'page.title': 'EzS2T-Whisper 設定',
+                'page.heading': 'EzS2T-Whisper 設定',
+                'page.subtitle': '音声文字起こしアプリケーションの設定',
+                'section.permissions': 'システム権限',
+                'section.hotkey': 'ホットキー',
+                'section.recognition': '音声認識',
+                'section.microphone': 'マイク設定',
+                'label.microphone': 'マイク',
+                'label.accessibility': 'アクセシビリティ',
+                'label.granted': '許可済み',
+                'label.denied': '未許可',
+                'label.hotkey_current': '録音開始キー',
+                'label.record_mode': '録音モード',
+                'label.model_path': 'モデルファイル',
+                'label.language': '言語',
+                'label.audio_device': '入力デバイス',
+                'label.ui_language': 'UI言語',
+                'button.change': '変更...',
+                'button.browse': '参照...',
+                'button.save': '設定を保存',
+                'placeholder.model_path': 'モデルファイルのパスを選択または入力してください',
+                'option.press_to_hold': '押下中録音',
+                'option.toggle': 'トグル切替',
+                'option.system_default': 'システムデフォルト',
+                'alert.save_success': '設定を保存しました。\n\nSettings saved.\n\n変更を適用するには、アプリケーションを再起動してください。\nPlease restart the application to apply changes.',
+                'alert.select_model': 'モデルファイルを選択してください',
+                'alert.invalid_model': '無効なモデルファイルです',
+                'alert.save_failed': '設定の保存に失敗しました',
+                'alert.select_hotkey': 'ホットキーを設定してください',
+                'alert.modifier_key_recommended': 'セキュリティのため、少なくとも1つの修飾キー（⌃⇧⌥⌘）を設定することを推奨します。',
+                'modal.title': 'ホットキー設定',
+                'modal.instruction': '入力欄をクリックして、設定したいキーの組み合わせを押してください',
+                'modal.conflict_warning': '競合検出:',
+                'modal.button_save': '保存',
+                'modal.button_cancel': 'キャンセル',
+                'footer': 'EzS2T-Whisper v0.3.0 | オープンソース (MIT License)'
+            },
+            en: {
+                'page.title': 'EzS2T-Whisper Settings',
+                'page.heading': 'EzS2T-Whisper Settings',
+                'page.subtitle': 'Speech-to-Text Application Settings',
+                'section.permissions': 'System Permissions',
+                'section.hotkey': 'Hotkey',
+                'section.recognition': 'Speech Recognition',
+                'section.microphone': 'Microphone Settings',
+                'label.microphone': 'Microphone',
+                'label.accessibility': 'Accessibility',
+                'label.granted': 'Granted',
+                'label.denied': 'Denied',
+                'label.hotkey_current': 'Recording Hotkey',
+                'label.record_mode': 'Recording Mode',
+                'label.model_path': 'Model File',
+                'label.language': 'Language',
+                'label.audio_device': 'Input Device',
+                'label.ui_language': 'UI Language',
+                'button.change': 'Change...',
+                'button.browse': 'Browse...',
+                'button.save': 'Save Settings',
+                'placeholder.model_path': 'Select or enter model file path',
+                'option.press_to_hold': 'Press to Hold',
+                'option.toggle': 'Toggle',
+                'option.system_default': 'System Default',
+                'alert.save_success': 'Settings saved.\n\n設定を保存しました。\n\nPlease restart the application to apply changes.\n変更を適用するには、アプリケーションを再起動してください。',
+                'alert.select_model': 'Please select a model file',
+                'alert.invalid_model': 'Invalid model file',
+                'alert.save_failed': 'Failed to save settings',
+                'alert.select_hotkey': 'Please set a hotkey',
+                'alert.modifier_key_recommended': 'For security, it is recommended to set at least one modifier key (⌃⇧⌥⌘).',
+                'modal.title': 'Set Hotkey',
+                'modal.instruction': 'Click the input field and press your desired key combination',
+                'modal.conflict_warning': 'Conflict Detected:',
+                'modal.button_save': 'Save',
+                'modal.button_cancel': 'Cancel',
+                'footer': 'EzS2T-Whisper v0.3.0 | Open Source (MIT License)'
+            }
+        };
+
+        // Current language
+        let currentLanguage = 'ja';
+
+        // Translation function
+        function t(key) {
+            return translations[currentLanguage]?.[key] || key;
+        }
+
+        // Set language and update UI
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            updateUILanguage();
+        }
+
+        // Update all UI text based on current language
+        function updateUILanguage() {
+            // Update all elements with data-i18n attribute
+            document.querySelectorAll('[data-i18n]').forEach(elem => {
+                const key = elem.getAttribute('data-i18n');
+                const translation = t(key);
+
+                if (elem.tagName === 'INPUT' && elem.type !== 'text') {
+                    // For buttons, use value
+                    elem.value = translation;
+                } else {
+                    // For other elements, use textContent
+                    elem.textContent = translation;
+                }
+            });
+
+            // Update page title
+            document.title = t('page.title');
+
+            // Update select options with data-i18n-options
+            document.querySelectorAll('select').forEach(select => {
+                select.querySelectorAll('option[data-i18n]').forEach(option => {
+                    const key = option.getAttribute('data-i18n');
+                    option.textContent = t(key);
+                });
+            });
+
+            // Update placeholders
+            const modelPathInput = document.getElementById('model-path');
+            if (modelPathInput) {
+                modelPathInput.placeholder = t('placeholder.model_path');
+            }
+        }
 
         // Load settings from server
         async function loadSettings() {
@@ -219,6 +354,14 @@
                     throw new Error('Failed to load settings');
                 }
                 const config = await response.json();
+
+                // Set UI language first
+                const uiLang = config.ui_language || 'ja';
+                setLanguage(uiLang);
+                const uiLangSelect = document.getElementById('ui-language');
+                if (uiLangSelect) {
+                    uiLangSelect.value = uiLang;
+                }
 
                 // Populate form fields
                 document.getElementById('record-mode').value = config.recording_mode || 'press-to-hold';
@@ -371,10 +514,11 @@
             const recordMode = document.getElementById('record-mode').value;
             const language = document.getElementById('language').value;
             const audioDeviceId = parseInt(document.getElementById('audio-device').value);
+            const uiLanguage = document.getElementById('ui-language')?.value || 'ja';
 
             // Validate model path before saving
             if (!modelPath) {
-                alert('モデルファイルを選択してください');
+                alert(t('alert.select_model'));
                 return;
             }
 
@@ -390,7 +534,7 @@
 
                 const validateResult = await validateResponse.json();
                 if (!validateResult.valid) {
-                    alert('無効なモデルファイルです: ' + validateResult.message);
+                    alert(t('alert.invalid_model') + ': ' + validateResult.message);
                     return;
                 }
 
@@ -404,7 +548,8 @@
                         model_path: modelPath,
                         recording_mode: recordMode,
                         language: language,
-                        audio_device_id: audioDeviceId
+                        audio_device_id: audioDeviceId,
+                        ui_language: uiLanguage
                     })
                 });
 
@@ -412,10 +557,10 @@
                     throw new Error('Failed to save settings');
                 }
 
-                alert('設定を保存しました。変更を適用するには、アプリケーションを再起動してください。');
+                alert(t('alert.save_success'));
             } catch (error) {
                 console.error('Failed to save settings:', error);
-                alert('設定の保存に失敗しました: ' + error.message);
+                alert(t('alert.save_failed') + ': ' + error.message);
             }
         }
 

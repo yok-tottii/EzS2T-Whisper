@@ -312,6 +312,8 @@ go vet ./...
 - [gordonklaus/portaudio](https://github.com/gordonklaus/portaudio) - オーディオ入力
 - [Material Symbols and Icons](https://fonts.google.com/icons) (Apache 2.0) - システムトレイアイコン
 
+各ライセンス情報の詳細は、`LICENSES/`ディレクトリをご覧ください。
+
 ## アイコン
 
 システムトレイアイコンには、Googleの [Material Symbols and Icons](https://fonts.google.com/icons) を使用しています（Apache License 2.0）。
