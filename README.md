@@ -95,13 +95,13 @@ go build -ldflags="-s -w" -o ezs2t-whisper ./cmd/ezs2t-whisper
 
 ### デフォルトモデル
 
-- **`ggml-large-v3-turbo-q5_0.gguf`** (~1.5GB)
+- **`ggml-large-v3-turbo-q5_0.bin`** (~1.5GB)
   - 用途: 精度優先
   - 推奨: Apple Silicon M1以上
 
 ### 軽量モデル
 
-- **`ggml-small-q5_1.gguf`** (~200MB)
+- **`ggml-small-q5_1.bin`** (~200MB)
   - 用途: バッテリー節約、低性能端末向け
   - 推奨: Intel Mac
 
@@ -111,7 +111,24 @@ go build -ldflags="-s -w" -o ezs2t-whisper ./cmd/ezs2t-whisper
 ~/Library/Application Support/EzS2T-Whisper/models/
 ```
 
-モデルファイルをこのディレクトリに配置すると、設定画面で自動的に検出されます。
+モデルファイル（`.bin` または `.gguf`）をこのディレクトリに配置すると、設定画面で自動的に検出されます。
+
+### モデルのダウンロード方法
+
+公式のWhisper.cppスクリプトを使用してダウンロードできます：
+
+```bash
+# Whisper.cppリポジトリをクローン
+git clone https://github.com/ggerganov/whisper.cpp.git
+cd whisper.cpp
+
+# 推奨モデルをダウンロード
+./models/download-ggml-model.sh large-v3-turbo
+
+# モデルファイルを EzS2T-Whisper のディレクトリにコピー
+mkdir -p ~/Library/Application\ Support/EzS2T-Whisper/models/
+cp models/ggml-large-v3-turbo.bin ~/Library/Application\ Support/EzS2T-Whisper/models/
+```
 
 ## トラブルシューティング
 
@@ -145,7 +162,7 @@ go build -ldflags="-s -w" -o ezs2t-whisper ./cmd/ezs2t-whisper
 **原因**: モデルが大きい、または処理能力が不足
 
 **解決策**:
-1. 軽量モデル（`ggml-small-q5_1.gguf`）に変更
+1. 軽量モデル（`ggml-small-q5_1.bin`）に変更
 2. Activity Monitor で他の重い処理が実行されていないか確認
 
 ### ビルドエラー
