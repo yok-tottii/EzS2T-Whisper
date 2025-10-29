@@ -3,7 +3,9 @@ package tray
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -34,6 +36,11 @@ type Manager struct {
 	menuRecordTest   *systray.MenuItem
 	menuAbout        *systray.MenuItem
 	menuQuit         *systray.MenuItem
+
+	// Icon cache
+	iconIdle       []byte
+	iconRecording  []byte
+	iconProcessing []byte
 }
 
 // Config holds tray manager configuration
@@ -48,7 +55,7 @@ type Config struct {
 
 // NewManager creates a new tray manager
 func NewManager(config Config) *Manager {
-	return &Manager{
+	m := &Manager{
 		state:           StateIdle,
 		onReadyCallback: config.OnReady,
 		onSettings:      config.OnSettings,
@@ -57,6 +64,13 @@ func NewManager(config Config) *Manager {
 		onAbout:         config.OnAbout,
 		onQuit:          config.OnQuit,
 	}
+
+	// Load icons once at initialization
+	m.iconIdle = loadIconData("speech_to_text_32dp_E3E3E3_FILL0_wght400_GRAD0_opsz40.png", getIdleFallback())
+	m.iconRecording = loadIconData("graphic_eq_32dp_F19E39_FILL0_wght400_GRAD0_opsz40.png", getRecordingFallback())
+	m.iconProcessing = loadIconData("hourglass_empty_32dp_75FB4C_FILL0_wght400_GRAD0_opsz40.png", getProcessingFallback())
+
+	return m
 }
 
 // Run starts the system tray (blocking call)
@@ -68,7 +82,6 @@ func (m *Manager) Run() {
 func (m *Manager) onReady() {
 	// Set initial icon and tooltip
 	m.updateIcon()
-	systray.SetTitle("🎤") // テキスト表示で可視化
 	systray.SetTooltip("EzS2T-Whisper")
 
 	// Add menu items
@@ -137,16 +150,13 @@ func (m *Manager) SetState(state State) {
 func (m *Manager) updateIcon() {
 	switch m.state {
 	case StateIdle:
-		systray.SetIcon(getIdleIcon())
-		systray.SetTitle("🎤")
+		systray.SetIcon(m.iconIdle)
 		systray.SetTooltip("EzS2T-Whisper - 待機中")
 	case StateRecording:
-		systray.SetIcon(getRecordingIcon())
-		systray.SetTitle("🔴")
+		systray.SetIcon(m.iconRecording)
 		systray.SetTooltip("EzS2T-Whisper - 録音中")
 	case StateProcessing:
-		systray.SetIcon(getProcessingIcon())
-		systray.SetTitle("⏳")
+		systray.SetIcon(m.iconProcessing)
 		systray.SetTooltip("EzS2T-Whisper - 処理中")
 	}
 }
@@ -156,10 +166,30 @@ func (m *Manager) Quit() {
 	systray.Quit()
 }
 
-// getIdleIcon returns the idle state icon (white microphone)
-func getIdleIcon() []byte {
-	// Simple base64-encoded PNG icon (16x16 white microphone)
-	// This is a placeholder - in production, use proper icon files
+// loadIconData loads an icon from the assets directory
+// If the file cannot be loaded, it returns a fallback placeholder icon
+func loadIconData(filename string, fallback []byte) []byte {
+	// Get executable directory
+	exe, err := os.Executable()
+	if err != nil {
+		log.Printf("警告: 実行ファイルのパスを取得できませんでした: %v", err)
+		return fallback
+	}
+	exeDir := filepath.Dir(exe)
+
+	// Try to load icon from assets/icon/ relative to executable
+	iconPath := filepath.Join(exeDir, "assets", "icon", filename)
+	data, err := os.ReadFile(iconPath)
+	if err != nil {
+		log.Printf("警告: アイコンファイルを読み込めませんでした (%s): %v", iconPath, err)
+		return fallback
+	}
+
+	return data
+}
+
+// getIdleFallback returns the fallback icon data for idle state
+func getIdleFallback() []byte {
 	return []byte{
 		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 		0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
@@ -178,10 +208,8 @@ func getIdleIcon() []byte {
 	}
 }
 
-// getRecordingIcon returns the recording state icon (red microphone)
-func getRecordingIcon() []byte {
-	// Simple base64-encoded PNG icon (16x16 red microphone)
-	// This is a placeholder - in production, use proper icon files
+// getRecordingFallback returns the fallback icon data for recording state
+func getRecordingFallback() []byte {
 	return []byte{
 		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 		0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
@@ -202,10 +230,8 @@ func getRecordingIcon() []byte {
 	}
 }
 
-// getProcessingIcon returns the processing state icon (blue microphone with spinner)
-func getProcessingIcon() []byte {
-	// Simple base64-encoded PNG icon (16x16 blue microphone)
-	// This is a placeholder - in production, use proper icon files
+// getProcessingFallback returns the fallback icon data for processing state
+func getProcessingFallback() []byte {
 	return []byte{
 		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 		0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,

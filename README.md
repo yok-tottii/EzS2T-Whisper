@@ -296,7 +296,18 @@ go vet ./...
 - [getlantern/systray](https://github.com/getlantern/systray) - システムトレイ
 - [golang-design/hotkey](https://github.com/golang-design/hotkey) - ホットキー
 - [gordonklaus/portaudio](https://github.com/gordonklaus/portaudio) - オーディオ入力
+- [Material Symbols and Icons](https://fonts.google.com/icons) (Apache 2.0) - システムトレイアイコン
+
+## アイコン
+
+システムトレイアイコンには、Googleの [Material Symbols and Icons](https://fonts.google.com/icons) を使用しています（Apache License 2.0）。
+
+使用アイコン：
+
+- `speech_to_text` - 待機状態
+- `graphic_eq` - 録音中
+- `hourglass_empty` - 処理中
 
 ---
 
-**Made with ❤️ for macOS**
+Made with ❤️ for macOS
