@@ -20,6 +20,7 @@ whisper.cpp/
 
 # Whisper models (large files)
 *.gguf
+*.bin
 
 # Application data
 config.json
@@ -31,6 +32,9 @@ config.json
 *.swp
 *.swo
 *~
+*.code-workspace
 
 # Local configuration (user-specific)
 .claude/
+specs
+CLAUDE.md
