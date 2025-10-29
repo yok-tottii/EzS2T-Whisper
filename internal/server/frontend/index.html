@@ -483,6 +483,12 @@
                 return;
             }
 
+            // Validate: at least one modifier should be set
+            if (!capturedHotkey.ctrl && !capturedHotkey.shift && !capturedHotkey.alt && !capturedHotkey.cmd) {
+                alert('セキュリティのため、少なくとも1つの修飾キー（⌃⇧⌥⌘）を設定することを推奨します。');
+                return;
+            }
+
             try {
                 const response = await fetch(`${API_BASE}/api/hotkey/register`, {
                     method: 'POST',
@@ -493,7 +499,8 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to register hotkey');
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Failed to register hotkey');
                 }
 
                 const result = await response.json();
@@ -502,10 +509,16 @@
                 document.getElementById('hotkey-display').value = formatHotkeyDisplay(capturedHotkey);
 
                 closeHotkeyEditor();
-                alert('ホットキーを変更しました: ' + formatHotkeyDisplay(capturedHotkey));
+
+                // Check response status
+                if (result.status === 'partial') {
+                    alert('⚠️ ' + result.message);
+                } else {
+                    alert('✓ ホットキーを変更しました: ' + formatHotkeyDisplay(capturedHotkey));
+                }
             } catch (error) {
                 console.error('Failed to save hotkey:', error);
-                alert('ホットキーの保存に失敗しました: ' + error.message);
+                alert('❌ ホットキーの保存に失敗しました:\n' + error.message);
             }
         }
 

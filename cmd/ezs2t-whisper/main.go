@@ -521,35 +521,66 @@ func (a *App) ReloadHotkey() error {
 		return fmt.Errorf("hotkey manager not initialized")
 	}
 
-	// 設定から新しいホットキー情報を取得
+	// 設定ファイルを再読み込み（最新の設定を取得）
+	configPath := config.GetConfigPath()
+	freshConfig, err := config.Load(configPath)
+	if err != nil {
+		a.logger.Error("設定ファイルの再読み込みに失敗: %v", err)
+		return fmt.Errorf("failed to reload config: %w", err)
+	}
+
+	// 新しいホットキー設定を作成
 	newConfig := hotkey.Config{
-		Modifiers: configToModifiers(a.config.Hotkey),
-		Key:       stringToKey(a.config.Hotkey.Key),
+		Modifiers: configToModifiers(freshConfig.Hotkey),
+		Key:       stringToKey(freshConfig.Hotkey.Key),
 		Mode:      hotkey.PressToHold, // TODO: RecordingModeから決定
 	}
 
 	a.logger.Info("新しいホットキー設定: Modifiers=%v, Key=%v", newConfig.Modifiers, newConfig.Key)
 
+	// 既存の設定をバックアップ（ロールバック用）
+	var oldConfig hotkey.Config
+	needsRollback := false
+
 	// 既存のホットキーを解除
 	if a.hotkeyMgr.IsRunning() {
 		a.logger.Info("既存のホットキーを解除します")
+		oldConfig = a.hotkeyMgr.GetConfig()
+		needsRollback = true
+
 		if err := a.hotkeyMgr.Close(); err != nil {
 			a.logger.Error("既存のホットキー解除に失敗: %v", err)
 			return fmt.Errorf("failed to unregister old hotkey: %w", err)
 		}
-		// イベントループを停止させるために短時間待機
-		time.Sleep(100 * time.Millisecond)
+		// イベントループが完全に終了するまで待機
+		time.Sleep(200 * time.Millisecond)
 	}
 
 	// 新しいホットキーを登録
 	a.logger.Info("新しいホットキーを登録します")
 	if err := a.hotkeyMgr.Register(newConfig); err != nil {
 		a.logger.Error("新しいホットキー登録に失敗: %v", err)
+
+		// ロールバック: 旧ホットキーを再登録
+		if needsRollback {
+			a.logger.Warn("ロールバック: 旧ホットキーを再登録します")
+			if rollbackErr := a.hotkeyMgr.Register(oldConfig); rollbackErr != nil {
+				a.logger.Error("ロールバック失敗: %v", rollbackErr)
+				a.trayMgr.ShowError("ホットキーの登録に失敗しました。アプリケーションを再起動してください。")
+				return fmt.Errorf("failed to register new hotkey and rollback failed: %w, rollback error: %v", err, rollbackErr)
+			}
+			go a.hotkeyEventLoop()
+			a.logger.Info("ロールバック完了")
+		}
+
 		return fmt.Errorf("failed to register new hotkey: %w", err)
 	}
 
 	// イベントループを再起動
 	go a.hotkeyEventLoop()
+
+	// アプリケーションの設定を更新
+	a.config = freshConfig
 
 	hotkeyFormatted := hotkey.FormatHotkey(newConfig.Modifiers, newConfig.Key)
 	a.logger.Info("ホットキー再登録完了: %s", hotkeyFormatted)

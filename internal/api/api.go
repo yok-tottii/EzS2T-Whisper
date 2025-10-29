@@ -142,6 +142,18 @@ func (h *Handler) handleHotkeyRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate hotkey configuration
+	if hotkey.Key == "" {
+		http.Error(w, "Key cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	// Check if at least one modifier is set (recommended for safety)
+	if !hotkey.Ctrl && !hotkey.Shift && !hotkey.Alt && !hotkey.Cmd {
+		http.Error(w, "At least one modifier key (Ctrl/Shift/Alt/Cmd) is recommended", http.StatusBadRequest)
+		return
+	}
+
 	// Update config
 	h.config.Hotkey = hotkey
 
@@ -157,6 +169,13 @@ func (h *Handler) handleHotkeyRegister(w http.ResponseWriter, r *http.Request) {
 		if err := h.onHotkeyChanged(); err != nil {
 			// Log warning but don't fail the request (config is already saved)
 			fmt.Printf("Warning: Failed to reload hotkey: %v\n", err)
+			// Return partial success response
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"status":  "partial",
+				"message": fmt.Sprintf("Hotkey saved but reload failed: %v. Please restart the application.", err),
+			})
+			return
 		}
 	}
 
