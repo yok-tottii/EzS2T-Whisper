@@ -5,6 +5,7 @@ import (
 	"log"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/yok-tottii/EzS2T-Whisper/internal/api"
@@ -461,7 +462,24 @@ func (a *App) handleRecordTest() {
 // handleAbout はバージョン情報を表示
 func (a *App) handleAbout() {
 	a.logger.Info("バージョン情報表示要求")
-	a.trayMgr.ShowNotification("EzS2T-Whisper", fmt.Sprintf("Version %s", version))
+
+	// バージョン情報をダイアログで表示
+	info := []string{
+		"EzS2T-Whisper",
+		"",
+		fmt.Sprintf("Version: %s", version),
+		"",
+		"高速ローカル音声認識アプリケーション",
+		"",
+		"Copyright © 2025 yoktotti",
+		"MIT License",
+	}
+
+	dialogText := strings.Join(info, "\\n")
+	script := fmt.Sprintf(`display dialog "%s" buttons {"OK"} default button "OK" with title "バージョン情報"`, dialogText)
+
+	// goroutineで非同期実行（UIブロックを防ぐ）
+	go exec.Command("osascript", "-e", script).Run()
 }
 
 // handleQuit はアプリケーションを終了
