@@ -129,8 +129,12 @@
         <div class="card">
             <h2>ホットキー</h2>
             <div class="form-group">
-                <label for="hotkey">録音開始キー</label>
-                <input type="text" id="hotkey" value="Ctrl+Option+Space" readonly>
+                <label for="hotkey-display">録音開始キー</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="hotkey-display" value="⌃⌥Space" readonly style="flex: 1;">
+                    <button type="button" onclick="openHotkeyEditor()">変更...</button>
+                </div>
+                <div id="hotkey-conflict" style="margin-top: 8px; font-size: 12px; color: #d70015; display: none;"></div>
             </div>
             <div class="form-group">
                 <label for="record-mode">録音モード</label>
@@ -138,6 +142,31 @@
                     <option value="press-to-hold">押下中録音</option>
                     <option value="toggle">トグル切替</option>
                 </select>
+            </div>
+        </div>
+
+        <!-- ホットキー編集モーダル -->
+        <div id="hotkey-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+            <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%;">
+                <h3>ホットキー設定</h3>
+                <p style="color: #6e6e73; font-size: 14px; margin-bottom: 20px;">
+                    入力欄をクリックして、設定したいキーの組み合わせを押してください
+                </p>
+
+                <div style="margin-bottom: 20px;">
+                    <input type="text" id="hotkey-input" placeholder="キーを押してください..." readonly
+                           style="width: 100%; padding: 15px; font-size: 18px; text-align: center; cursor: pointer;"
+                           onclick="captureHotkey()">
+                </div>
+
+                <div id="hotkey-modal-conflict" style="margin-bottom: 15px; padding: 10px; background: #ffe5e5; border-radius: 8px; display: none;">
+                    <strong>⚠️ 競合検出:</strong> <span id="conflict-apps"></span>
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="closeHotkeyEditor()" style="background: #6e6e73;">キャンセル</button>
+                    <button onclick="saveHotkey()" id="save-hotkey-btn">保存</button>
+                </div>
             </div>
         </div>
 
@@ -195,6 +224,11 @@
                 document.getElementById('record-mode').value = config.recording_mode || 'press-to-hold';
                 document.getElementById('language').value = config.language || 'ja';
                 document.getElementById('model-path').value = config.model_path || '';
+
+                // Display hotkey
+                if (config.hotkey) {
+                    document.getElementById('hotkey-display').value = formatHotkeyDisplay(config.hotkey);
+                }
 
                 // Validate model path if present
                 if (config.model_path) {
@@ -333,6 +367,145 @@
             } catch (error) {
                 console.error('Failed to save settings:', error);
                 alert('設定の保存に失敗しました: ' + error.message);
+            }
+        }
+
+        // Hotkey management
+        let capturedHotkey = {
+            ctrl: false,
+            shift: false,
+            alt: false,
+            cmd: false,
+            key: ''
+        };
+
+        // Open hotkey editor modal
+        function openHotkeyEditor() {
+            document.getElementById('hotkey-modal').style.display = 'flex';
+            document.getElementById('hotkey-input').value = '';
+            document.getElementById('hotkey-modal-conflict').style.display = 'none';
+            capturedHotkey = { ctrl: false, shift: false, alt: false, cmd: false, key: '' };
+        }
+
+        // Close hotkey editor modal
+        function closeHotkeyEditor() {
+            document.getElementById('hotkey-modal').style.display = 'none';
+        }
+
+        // Capture hotkey input
+        function captureHotkey() {
+            const input = document.getElementById('hotkey-input');
+            input.focus();
+            input.value = 'キーを押してください...';
+
+            function handleKeyDown(e) {
+                e.preventDefault();
+
+                // Record modifier keys
+                capturedHotkey.ctrl = e.ctrlKey;
+                capturedHotkey.shift = e.shiftKey;
+                capturedHotkey.alt = e.altKey;
+                capturedHotkey.cmd = e.metaKey;
+
+                // Record regular key
+                if (e.key && !['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+                    // Convert key name
+                    if (e.key === ' ') {
+                        capturedHotkey.key = 'Space';
+                    } else if (e.key === 'Enter') {
+                        capturedHotkey.key = 'Return';
+                    } else if (e.key === 'Esc' || e.key === 'Escape') {
+                        capturedHotkey.key = 'Escape';
+                    } else if (e.key.length === 1) {
+                        capturedHotkey.key = e.key.toUpperCase();
+                    } else {
+                        capturedHotkey.key = e.key;
+                    }
+
+                    // Update display
+                    input.value = formatHotkeyDisplay(capturedHotkey);
+
+                    // Validate hotkey
+                    validateHotkey(capturedHotkey);
+
+                    // Remove listener
+                    input.removeEventListener('keydown', handleKeyDown);
+                }
+            }
+
+            input.addEventListener('keydown', handleKeyDown);
+        }
+
+        // Format hotkey for display
+        function formatHotkeyDisplay(hk) {
+            let result = '';
+            if (hk.ctrl) result += '⌃';
+            if (hk.shift) result += '⇧';
+            if (hk.alt) result += '⌥';
+            if (hk.cmd) result += '⌘';
+            result += hk.key;
+            return result;
+        }
+
+        // Validate hotkey for conflicts
+        async function validateHotkey(hk) {
+            try {
+                const response = await fetch(`${API_BASE}/api/hotkey/validate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(hk)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to validate hotkey');
+                }
+
+                const result = await response.json();
+                const conflictDiv = document.getElementById('hotkey-modal-conflict');
+
+                if (result.conflicts && result.conflicts.length > 0) {
+                    document.getElementById('conflict-apps').textContent = result.conflicts.join(', ');
+                    conflictDiv.style.display = 'block';
+                } else {
+                    conflictDiv.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to validate hotkey:', error);
+            }
+        }
+
+        // Save hotkey
+        async function saveHotkey() {
+            if (!capturedHotkey.key) {
+                alert('ホットキーを設定してください');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/hotkey/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(capturedHotkey)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to register hotkey');
+                }
+
+                const result = await response.json();
+
+                // Update display
+                document.getElementById('hotkey-display').value = formatHotkeyDisplay(capturedHotkey);
+
+                closeHotkeyEditor();
+                alert('ホットキーを変更しました: ' + formatHotkeyDisplay(capturedHotkey));
+            } catch (error) {
+                console.error('Failed to save hotkey:', error);
+                alert('ホットキーの保存に失敗しました: ' + error.message);
             }
         }
 

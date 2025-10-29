@@ -10,20 +10,24 @@ import (
 	"strings"
 
 	"github.com/yok-tottii/EzS2T-Whisper/internal/config"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/hotkey"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/wizard"
+	hk "golang.design/x/hotkey"
 )
 
 // Handler manages API endpoints
 type Handler struct {
-	config *config.Config
-	wizard *wizard.SetupWizard
+	config          *config.Config
+	wizard          *wizard.SetupWizard
+	onHotkeyChanged func() error // Callback to reload hotkey in main app
 }
 
 // New creates a new API handler
-func New(cfg *config.Config, wiz *wizard.SetupWizard) *Handler {
+func New(cfg *config.Config, wiz *wizard.SetupWizard, onHotkeyChanged func() error) *Handler {
 	return &Handler{
-		config: cfg,
-		wizard: wiz,
+		config:          cfg,
+		wizard:          wiz,
+		onHotkeyChanged: onHotkeyChanged,
 	}
 }
 
@@ -100,11 +104,28 @@ func (h *Handler) handleHotkeyValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Implement actual conflict detection
-	// For now, return no conflicts
+	var request config.HotkeyConfig
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// HotkeyConfigからModifiersとKeyに変換
+	mods := hotkeyConfigToModifiers(request)
+	key := stringToKeyCode(request.Key)
+
+	// 競合チェック
+	conflicts := hotkey.CheckConflicts(mods, key)
+
+	// レスポンス作成
+	conflictNames := []string{}
+	for _, c := range conflicts {
+		conflictNames = append(conflictNames, c.Name)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"conflicts": []string{},
+		"conflicts": conflictNames,
 	})
 }
 
@@ -131,9 +152,18 @@ func (h *Handler) handleHotkeyRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reload hotkey in the running application
+	if h.onHotkeyChanged != nil {
+		if err := h.onHotkeyChanged(); err != nil {
+			// Log warning but don't fail the request (config is already saved)
+			fmt.Printf("Warning: Failed to reload hotkey: %v\n", err)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "success",
+		"status":  "success",
+		"message": "Hotkey registered and applied successfully",
 	})
 }
 
@@ -453,4 +483,75 @@ func (h *Handler) handleModelsValidate(w http.ResponseWriter, r *http.Request) {
 		"name":    filepath.Base(expandedPath),
 		"size":    formatSize(info.Size()),
 	})
+}
+
+// hotkeyConfigToModifiers は HotkeyConfig を golang.design/x/hotkey の Modifier スライスに変換
+func hotkeyConfigToModifiers(hkConfig config.HotkeyConfig) []hk.Modifier {
+	var mods []hk.Modifier
+	if hkConfig.Ctrl {
+		mods = append(mods, hk.ModCtrl)
+	}
+	if hkConfig.Shift {
+		mods = append(mods, hk.ModShift)
+	}
+	if hkConfig.Alt {
+		mods = append(mods, hk.ModOption)
+	}
+	if hkConfig.Cmd {
+		mods = append(mods, hk.ModCmd)
+	}
+	return mods
+}
+
+// stringToKeyCode は文字列をキーコードに変換
+func stringToKeyCode(keyStr string) hk.Key {
+	keyMap := map[string]hk.Key{
+		"Space":  hk.KeySpace,
+		"A":      hk.KeyA,
+		"B":      hk.KeyB,
+		"C":      hk.KeyC,
+		"D":      hk.KeyD,
+		"E":      hk.KeyE,
+		"F":      hk.KeyF,
+		"G":      hk.KeyG,
+		"H":      hk.KeyH,
+		"I":      hk.KeyI,
+		"J":      hk.KeyJ,
+		"K":      hk.KeyK,
+		"L":      hk.KeyL,
+		"M":      hk.KeyM,
+		"N":      hk.KeyN,
+		"O":      hk.KeyO,
+		"P":      hk.KeyP,
+		"Q":      hk.KeyQ,
+		"R":      hk.KeyR,
+		"S":      hk.KeyS,
+		"T":      hk.KeyT,
+		"U":      hk.KeyU,
+		"V":      hk.KeyV,
+		"W":      hk.KeyW,
+		"X":      hk.KeyX,
+		"Y":      hk.KeyY,
+		"Z":      hk.KeyZ,
+		"0":      hk.Key0,
+		"1":      hk.Key1,
+		"2":      hk.Key2,
+		"3":      hk.Key3,
+		"4":      hk.Key4,
+		"5":      hk.Key5,
+		"6":      hk.Key6,
+		"7":      hk.Key7,
+		"8":      hk.Key8,
+		"9":      hk.Key9,
+		"Escape": hk.KeyEscape,
+		"Return": hk.KeyReturn,
+		"Tab":    hk.KeyTab,
+	}
+
+	if key, ok := keyMap[keyStr]; ok {
+		return key
+	}
+
+	// デフォルトはSpace
+	return hk.KeySpace
 }

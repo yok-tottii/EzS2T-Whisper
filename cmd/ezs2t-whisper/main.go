@@ -91,7 +91,7 @@ func main() {
 
 	// HTTPサーバーの初期化
 	app.httpServer = server.New(server.DefaultConfig())
-	app.apiHandler = api.New(app.config, app.wizard)
+	app.apiHandler = api.New(app.config, app.wizard, app.ReloadHotkey)
 
 	// APIルートを登録
 	app.apiHandler.RegisterRoutes(app.httpServer.GetMux())
@@ -179,11 +179,11 @@ func (a *App) onReady() {
 	if a.accGranted {
 		a.hotkeyMgr = hotkey.New()
 
-		// ホットキーの設定（Ctrl+Option+Space）
+		// 設定ファイルからホットキー設定を読み込み
 		hotkeyConfig := hotkey.Config{
-			Modifiers: []hk.Modifier{hk.ModCtrl, hk.ModOption},
-			Key:       hk.KeySpace,
-			Mode:      hotkey.PressToHold,
+			Modifiers: configToModifiers(a.config.Hotkey),
+			Key:       stringToKey(a.config.Hotkey.Key),
+			Mode:      hotkey.PressToHold, // TODO: RecordingModeから決定
 		}
 
 		// ホットキーの登録
@@ -504,4 +504,127 @@ func (a *App) handleQuit() {
 	}
 
 	a.logger.Info("アプリケーション終了")
+}
+
+// ReloadHotkey は設定ファイルから読み込んだ内容で、ホットキーを再登録する
+func (a *App) ReloadHotkey() error {
+	a.logger.Info("ホットキー再登録要求")
+
+	// 権限チェック
+	if !a.accGranted {
+		a.logger.Warn("ホットキー再登録: アクセシビリティ権限がありません")
+		return fmt.Errorf("accessibility permission not granted")
+	}
+
+	if a.hotkeyMgr == nil {
+		a.logger.Warn("ホットキー再登録: ホットキーマネージャーが初期化されていません")
+		return fmt.Errorf("hotkey manager not initialized")
+	}
+
+	// 設定から新しいホットキー情報を取得
+	newConfig := hotkey.Config{
+		Modifiers: configToModifiers(a.config.Hotkey),
+		Key:       stringToKey(a.config.Hotkey.Key),
+		Mode:      hotkey.PressToHold, // TODO: RecordingModeから決定
+	}
+
+	a.logger.Info("新しいホットキー設定: Modifiers=%v, Key=%v", newConfig.Modifiers, newConfig.Key)
+
+	// 既存のホットキーを解除
+	if a.hotkeyMgr.IsRunning() {
+		a.logger.Info("既存のホットキーを解除します")
+		if err := a.hotkeyMgr.Close(); err != nil {
+			a.logger.Error("既存のホットキー解除に失敗: %v", err)
+			return fmt.Errorf("failed to unregister old hotkey: %w", err)
+		}
+		// イベントループを停止させるために短時間待機
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// 新しいホットキーを登録
+	a.logger.Info("新しいホットキーを登録します")
+	if err := a.hotkeyMgr.Register(newConfig); err != nil {
+		a.logger.Error("新しいホットキー登録に失敗: %v", err)
+		return fmt.Errorf("failed to register new hotkey: %w", err)
+	}
+
+	// イベントループを再起動
+	go a.hotkeyEventLoop()
+
+	hotkeyFormatted := hotkey.FormatHotkey(newConfig.Modifiers, newConfig.Key)
+	a.logger.Info("ホットキー再登録完了: %s", hotkeyFormatted)
+	a.trayMgr.ShowNotification("ホットキー変更", fmt.Sprintf("新しいホットキー: %s", hotkeyFormatted))
+
+	return nil
+}
+
+// configToModifiers は HotkeyConfig を golang.design/x/hotkey の Modifier スライスに変換
+func configToModifiers(hkConfig config.HotkeyConfig) []hk.Modifier {
+	var mods []hk.Modifier
+	if hkConfig.Ctrl {
+		mods = append(mods, hk.ModCtrl)
+	}
+	if hkConfig.Shift {
+		mods = append(mods, hk.ModShift)
+	}
+	if hkConfig.Alt {
+		mods = append(mods, hk.ModOption)
+	}
+	if hkConfig.Cmd {
+		mods = append(mods, hk.ModCmd)
+	}
+	return mods
+}
+
+// stringToKey は文字列をキーコードに変換
+func stringToKey(keyStr string) hk.Key {
+	keyMap := map[string]hk.Key{
+		"Space":  hk.KeySpace,
+		"A":      hk.KeyA,
+		"B":      hk.KeyB,
+		"C":      hk.KeyC,
+		"D":      hk.KeyD,
+		"E":      hk.KeyE,
+		"F":      hk.KeyF,
+		"G":      hk.KeyG,
+		"H":      hk.KeyH,
+		"I":      hk.KeyI,
+		"J":      hk.KeyJ,
+		"K":      hk.KeyK,
+		"L":      hk.KeyL,
+		"M":      hk.KeyM,
+		"N":      hk.KeyN,
+		"O":      hk.KeyO,
+		"P":      hk.KeyP,
+		"Q":      hk.KeyQ,
+		"R":      hk.KeyR,
+		"S":      hk.KeyS,
+		"T":      hk.KeyT,
+		"U":      hk.KeyU,
+		"V":      hk.KeyV,
+		"W":      hk.KeyW,
+		"X":      hk.KeyX,
+		"Y":      hk.KeyY,
+		"Z":      hk.KeyZ,
+		"0":      hk.Key0,
+		"1":      hk.Key1,
+		"2":      hk.Key2,
+		"3":      hk.Key3,
+		"4":      hk.Key4,
+		"5":      hk.Key5,
+		"6":      hk.Key6,
+		"7":      hk.Key7,
+		"8":      hk.Key8,
+		"9":      hk.Key9,
+		"Escape": hk.KeyEscape,
+		"Return": hk.KeyReturn,
+		"Tab":    hk.KeyTab,
+	}
+
+	if key, ok := keyMap[keyStr]; ok {
+		return key
+	}
+
+	// デフォルトはSpace
+	return hk.KeySpace
 }
