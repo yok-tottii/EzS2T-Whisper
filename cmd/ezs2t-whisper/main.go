@@ -214,7 +214,12 @@ func (a *App) onReady() {
 	fmt.Println("==========================================================")
 	fmt.Printf("📝 設定画面URL: http://127.0.0.1:18765\n")
 	fmt.Printf("🎤 メニューバーのアイコン（🎤）をクリックしてメニューを開けます\n")
-	fmt.Printf("⌨️  ホットキー: Ctrl+Option+Space\n")
+
+	// 現在のホットキー設定を表示
+	currentHotkey := a.hotkeyMgr.GetConfig()
+	hotkeyDisplay := hotkey.FormatHotkey(currentHotkey.Modifiers, currentHotkey.Key)
+	fmt.Printf("⌨️  ホットキー: %s\n", hotkeyDisplay)
+
 	fmt.Printf("🛑 終了: Ctrl+C またはメニューから「終了」\n")
 	fmt.Println("==========================================================" + "\n")
 }
