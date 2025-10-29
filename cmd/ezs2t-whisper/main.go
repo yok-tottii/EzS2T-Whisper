@@ -170,10 +170,15 @@ func (a *App) onReady() {
 			a.logger.Error("PortAudioドライバの作成に失敗: %v", err)
 		} else {
 			a.audioConfig = audio.DefaultConfig()
+			// 設定ファイルのデバイスIDを反映（-1の場合はシステムデフォルト）
+			a.audioConfig.DeviceID = a.config.AudioDeviceID
+			a.logger.Info("設定からオーディオデバイスIDを適用: %d", a.config.AudioDeviceID)
 			if err := a.audioDriver.Initialize(a.audioConfig); err != nil {
 				a.logger.Error("オーディオドライバの初期化に失敗: %v", err)
 			} else {
 				a.logger.Info("オーディオドライバ初期化完了")
+				// API HandlerにAudioDriverを設定
+				a.apiHandler.SetAudioDriver(a.audioDriver)
 			}
 		}
 	}

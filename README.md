@@ -175,6 +175,20 @@ brew install portaudio
 #### `ld: library not found for -lwhisper`
 Whisper.cppが正しくビルドされていません。[Whisper.cpp](https://github.com/ggerganov/whisper.cpp)のセットアップを確認してください。
 
+## 動作確認
+
+本アプリケーションは以下の環境で動作確認済みです：
+
+### テスト済みマイクデバイス
+- **MacBook Airのマイク** - 音声入力・文字起こし動作確認済み
+- **iPhoneのマイク** - 音声入力・文字起こし動作確認済み
+
+### テスト済み機能
+- ✅ 複数マイクデバイス認識と切り替え
+- ✅ 各デバイスからの音声入力
+- ✅ Whisper.cppによる文字起こし
+- ✅ 自動テキスト貼り付け
+
 ## API エンドポイント
 
 | メソッド | エンドポイント | 説明 |

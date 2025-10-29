@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/yok-tottii/EzS2T-Whisper/internal/audio"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/config"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/hotkey"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/wizard"
@@ -19,6 +20,7 @@ import (
 type Handler struct {
 	config          *config.Config
 	wizard          *wizard.SetupWizard
+	audioDriver     audio.AudioDriver
 	onHotkeyChanged func() error // Callback to reload hotkey in main app
 }
 
@@ -27,8 +29,15 @@ func New(cfg *config.Config, wiz *wizard.SetupWizard, onHotkeyChanged func() err
 	return &Handler{
 		config:          cfg,
 		wizard:          wiz,
+		audioDriver:     nil, // Will be set later via SetAudioDriver
 		onHotkeyChanged: onHotkeyChanged,
 	}
+}
+
+// SetAudioDriver sets the audio driver instance
+// This is called after the audio driver is initialized in main.go
+func (h *Handler) SetAudioDriver(driver audio.AudioDriver) {
+	h.audioDriver = driver
 }
 
 // RegisterRoutes registers all API routes on the given mux
@@ -193,6 +202,19 @@ type Device struct {
 	IsDefault bool   `json:"is_default"`
 }
 
+// convertAudioDevices converts audio.Device slice to api.Device slice
+func convertAudioDevices(audioDevices []audio.Device) []Device {
+	devices := make([]Device, 0, len(audioDevices))
+	for _, dev := range audioDevices {
+		devices = append(devices, Device{
+			ID:        dev.ID,
+			Name:      dev.Name,
+			IsDefault: dev.IsDefault,
+		})
+	}
+	return devices
+}
+
 // handleDevices handles GET /api/devices
 func (h *Handler) handleDevices(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -200,10 +222,37 @@ func (h *Handler) handleDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Get actual devices from audio driver
-	// For now, return mock data
-	devices := []Device{
-		{ID: 0, Name: "Built-in Microphone", IsDefault: true},
+	var devices []Device
+
+	// Get actual devices from audio driver
+	if h.audioDriver != nil {
+		audioDevices, err := h.audioDriver.ListDevices()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to list audio devices: %v", err), http.StatusInternalServerError)
+			return
+		}
+		devices = convertAudioDevices(audioDevices)
+	} else {
+		// AudioDriver not initialized - create a temporary driver to list devices
+		// This allows users to see and select devices even before granting microphone permission
+		tempDriver, err := audio.NewPortAudioDriver()
+		if err != nil {
+			// If we can't create a driver, return system default only
+			devices = []Device{
+				{ID: -1, Name: "システムデフォルト", IsDefault: true},
+			}
+		} else {
+			defer tempDriver.Close()
+			audioDevices, err := tempDriver.ListDevices()
+			if err != nil {
+				// If we can't list devices, return system default only
+				devices = []Device{
+					{ID: -1, Name: "システムデフォルト", IsDefault: true},
+				}
+			} else {
+				devices = convertAudioDevices(audioDevices)
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

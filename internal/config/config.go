@@ -54,7 +54,7 @@ func DefaultConfig() *Config {
 		RecordingMode:  "press-to-hold",
 		ModelPath:      "", // Empty by default - user must specify
 		Language:       "ja",
-		AudioDeviceID:  0, // Default device
+		AudioDeviceID:  -1, // -1 means use system default device
 		UILanguage:     "ja",
 		MaxRecordTime:  60, // 60 seconds
 		PasteSplitSize: 500, // 500 characters

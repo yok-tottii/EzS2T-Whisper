@@ -230,12 +230,59 @@
                     document.getElementById('hotkey-display').value = formatHotkeyDisplay(config.hotkey);
                 }
 
+                // Load audio devices
+                await loadAudioDevices(config.audio_device_id || -1);
+
                 // Validate model path if present
                 if (config.model_path) {
                     validateModelPath(config.model_path);
                 }
             } catch (error) {
                 console.error('Failed to load settings:', error);
+            }
+        }
+
+        // Load audio devices
+        async function loadAudioDevices(selectedDeviceId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/devices`);
+                if (!response.ok) {
+                    throw new Error('Failed to load audio devices');
+                }
+                const result = await response.json();
+                const devices = result.devices || [];
+
+                // Sort devices: default device first, then others in original order
+                devices.sort((a, b) => {
+                    if (a.is_default && !b.is_default) return -1;
+                    if (!a.is_default && b.is_default) return 1;
+                    return 0;  // Keep original order for non-default devices
+                });
+
+                const select = document.getElementById('audio-device');
+                select.innerHTML = ''; // Clear existing options
+
+                // Add devices to dropdown
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    option.textContent = device.name + (device.is_default ? ' (デフォルト)' : '');
+                    if (device.id === selectedDeviceId) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+
+                // If no device was selected, select the default
+                if (!select.value && devices.length > 0) {
+                    const defaultDevice = devices.find(d => d.is_default);
+                    if (defaultDevice) {
+                        select.value = defaultDevice.id;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load audio devices:', error);
+                // Keep the default "システムデフォルト" option
             }
         }
 
@@ -323,6 +370,7 @@
             const modelPath = document.getElementById('model-path').value;
             const recordMode = document.getElementById('record-mode').value;
             const language = document.getElementById('language').value;
+            const audioDeviceId = parseInt(document.getElementById('audio-device').value);
 
             // Validate model path before saving
             if (!modelPath) {
@@ -355,7 +403,8 @@
                     body: JSON.stringify({
                         model_path: modelPath,
                         recording_mode: recordMode,
-                        language: language
+                        language: language,
+                        audio_device_id: audioDeviceId
                     })
                 });
 
