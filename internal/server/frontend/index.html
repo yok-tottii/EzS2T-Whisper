@@ -144,11 +144,13 @@
         <div class="card">
             <h2>音声認識</h2>
             <div class="form-group">
-                <label for="model">モデル</label>
-                <select id="model">
-                    <option value="large-v3-turbo">Large v3 Turbo (推奨)</option>
-                    <option value="small">Small (軽量)</option>
-                </select>
+                <label for="model-path">モデルファイル</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="model-path" placeholder="モデルファイルのパスを選択または入力してください" style="flex: 1;">
+                    <button type="button" onclick="browseModelFile()" style="padding: 10px 20px;">参照...</button>
+                </div>
+                <div id="model-info" style="margin-top: 8px; font-size: 12px; color: #6e6e73;"></div>
+                <div id="model-error" style="margin-top: 8px; font-size: 12px; color: #d70015; display: none;"></div>
             </div>
             <div class="form-group">
                 <label for="language">言語</label>
@@ -177,13 +179,177 @@
     </div>
 
     <script>
-        function saveSettings() {
-            alert('設定を保存しました（開発中）');
+        // API base URL
+        const API_BASE = '';
+
+        // Load settings from server
+        async function loadSettings() {
+            try {
+                const response = await fetch(`${API_BASE}/api/settings`);
+                if (!response.ok) {
+                    throw new Error('Failed to load settings');
+                }
+                const config = await response.json();
+
+                // Populate form fields
+                document.getElementById('record-mode').value = config.recording_mode || 'press-to-hold';
+                document.getElementById('language').value = config.language || 'ja';
+                document.getElementById('model-path').value = config.model_path || '';
+
+                // Validate model path if present
+                if (config.model_path) {
+                    validateModelPath(config.model_path);
+                }
+            } catch (error) {
+                console.error('Failed to load settings:', error);
+            }
         }
 
-        // Load settings on page load
+        // Browse for model file
+        async function browseModelFile() {
+            try {
+                const response = await fetch(`${API_BASE}/api/models/browse`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to open file browser');
+                }
+
+                const result = await response.json();
+
+                if (result.cancelled) {
+                    return; // User cancelled
+                }
+
+                if (result.path) {
+                    document.getElementById('model-path').value = result.path;
+
+                    // Show model info
+                    const infoDiv = document.getElementById('model-info');
+                    infoDiv.textContent = `${result.name} (${result.size})`;
+                    infoDiv.style.display = 'block';
+
+                    // Hide error
+                    document.getElementById('model-error').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to browse file:', error);
+                const errorDiv = document.getElementById('model-error');
+                errorDiv.textContent = 'ファイル選択ダイアログを開けませんでした: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        // Validate model path
+        async function validateModelPath(path) {
+            if (!path) {
+                document.getElementById('model-info').style.display = 'none';
+                document.getElementById('model-error').style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/models/validate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ path })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to validate model path');
+                }
+
+                const result = await response.json();
+                const infoDiv = document.getElementById('model-info');
+                const errorDiv = document.getElementById('model-error');
+
+                if (result.valid) {
+                    infoDiv.textContent = `✓ ${result.name} (${result.size})`;
+                    infoDiv.style.display = 'block';
+                    infoDiv.style.color = '#0a7d3e';
+                    errorDiv.style.display = 'none';
+                } else {
+                    infoDiv.style.display = 'none';
+                    errorDiv.textContent = '✗ ' + result.message;
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Failed to validate model path:', error);
+                const errorDiv = document.getElementById('model-error');
+                errorDiv.textContent = 'モデルファイルの検証に失敗しました';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        // Save settings
+        async function saveSettings() {
+            const modelPath = document.getElementById('model-path').value;
+            const recordMode = document.getElementById('record-mode').value;
+            const language = document.getElementById('language').value;
+
+            // Validate model path before saving
+            if (!modelPath) {
+                alert('モデルファイルを選択してください');
+                return;
+            }
+
+            try {
+                // Validate first
+                const validateResponse = await fetch(`${API_BASE}/api/models/validate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ path: modelPath })
+                });
+
+                const validateResult = await validateResponse.json();
+                if (!validateResult.valid) {
+                    alert('無効なモデルファイルです: ' + validateResult.message);
+                    return;
+                }
+
+                // Save settings
+                const response = await fetch(`${API_BASE}/api/settings`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model_path: modelPath,
+                        recording_mode: recordMode,
+                        language: language
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save settings');
+                }
+
+                alert('設定を保存しました。変更を適用するには、アプリケーションを再起動してください。');
+            } catch (error) {
+                console.error('Failed to save settings:', error);
+                alert('設定の保存に失敗しました: ' + error.message);
+            }
+        }
+
+        // Add input event listener for model path validation
         document.addEventListener('DOMContentLoaded', function() {
             console.log('EzS2T-Whisper settings page loaded');
+            loadSettings();
+
+            // Add debounced validation on model path input
+            const modelPathInput = document.getElementById('model-path');
+            let validationTimeout;
+            modelPathInput.addEventListener('input', function(e) {
+                clearTimeout(validationTimeout);
+                validationTimeout = setTimeout(() => {
+                    validateModelPath(e.target.value);
+                }, 500);
+            });
         });
     </script>
 </body>

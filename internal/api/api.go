@@ -5,20 +5,25 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/yok-tottii/EzS2T-Whisper/internal/config"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/wizard"
 )
 
 // Handler manages API endpoints
 type Handler struct {
 	config *config.Config
+	wizard *wizard.SetupWizard
 }
 
 // New creates a new API handler
-func New(cfg *config.Config) *Handler {
+func New(cfg *config.Config, wiz *wizard.SetupWizard) *Handler {
 	return &Handler{
 		config: cfg,
+		wizard: wiz,
 	}
 }
 
@@ -30,6 +35,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/devices", h.handleDevices)
 	mux.HandleFunc("/api/models", h.handleModels)
 	mux.HandleFunc("/api/models/rescan", h.handleModelsRescan)
+	mux.HandleFunc("/api/models/browse", h.handleModelsBrowse)
+	mux.HandleFunc("/api/models/validate", h.handleModelsValidate)
 	mux.HandleFunc("/api/test/record", h.handleTestRecord)
 	mux.HandleFunc("/api/permissions", h.handlePermissions)
 }
@@ -70,6 +77,14 @@ func (h *Handler) putSettings(w http.ResponseWriter, r *http.Request) {
 	if err := h.config.Save(configPath); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to save config: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+	// 初回設定完了フラグを立てる
+	if h.wizard != nil {
+		if err := h.wizard.MarkSetupCompleted(); err != nil {
+			// エラーログのみ、設定保存は成功しているので処理を継続
+			fmt.Printf("Warning: Failed to mark setup completed: %v\n", err)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -214,8 +229,8 @@ func (h *Handler) scanModels() []Model {
 			continue
 		}
 
-		// Only include .gguf files
-		if filepath.Ext(entry.Name()) != ".gguf" {
+		// Only include .bin or .gguf files
+		if !config.IsValidModelExtension(entry.Name()) {
 			continue
 		}
 
@@ -226,7 +241,9 @@ func (h *Handler) scanModels() []Model {
 		}
 
 		size := formatSize(info.Size())
-		recommended := entry.Name() == "ggml-large-v3-turbo-q5_0.gguf"
+		// Check if it's the recommended model (compare base name without extension)
+		baseName := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		recommended := baseName == "ggml-large-v3-turbo-q5_0"
 
 		models = append(models, Model{
 			Name:        entry.Name(),
@@ -290,4 +307,150 @@ func (h *Handler) handlePermissions(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(permissions)
+}
+
+// handleModelsBrowse handles POST /api/models/browse
+// Opens a native file picker dialog using osascript (AppleScript)
+func (h *Handler) handleModelsBrowse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Use osascript to open macOS file picker
+	// AppleScript command to choose file with .bin or .gguf extension
+	script := `
+		set theFile to choose file with prompt "Whisperモデルファイル (.bin / .gguf) を選択してください" of type {"bin", "gguf"}
+		return POSIX path of theFile
+	`
+
+	cmd := exec.Command("osascript", "-e", script)
+	output, err := cmd.Output()
+	if err != nil {
+		// User cancelled or error occurred
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Exit code 128 means user cancelled
+			if exitErr.ExitCode() == 128 {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"cancelled": true,
+				})
+				return
+			}
+		}
+		http.Error(w, fmt.Sprintf("Failed to open file picker: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Get the file path from output
+	filePath := strings.TrimSpace(string(output))
+
+	// Validate the selected file
+	expandedPath, err := config.ExpandPath(filePath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid file path: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Check if file exists and is a .bin or .gguf file
+	info, err := os.Stat(expandedPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("File not found: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if info.IsDir() {
+		http.Error(w, "Selected path is a directory, not a file", http.StatusBadRequest)
+		return
+	}
+
+	if !config.IsValidModelExtension(expandedPath) {
+		http.Error(w, "File must have .bin or .gguf extension", http.StatusBadRequest)
+		return
+	}
+
+	// Return the selected file path
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"path": filePath,
+		"name": filepath.Base(filePath),
+		"size": formatSize(info.Size()),
+	})
+}
+
+// handleModelsValidate handles POST /api/models/validate
+func (h *Handler) handleModelsValidate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request struct {
+		Path string `json:"path"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Expand path
+	expandedPath, err := config.ExpandPath(request.Path)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"message": fmt.Sprintf("パスの展開に失敗: %v", err),
+		})
+		return
+	}
+
+	// Check if file exists
+	info, err := os.Stat(expandedPath)
+	if os.IsNotExist(err) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"message": fmt.Sprintf("ファイルが見つかりません: %s", expandedPath),
+		})
+		return
+	}
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"message": fmt.Sprintf("ファイルの確認に失敗: %v", err),
+		})
+		return
+	}
+
+	// Check if it's a regular file
+	if info.IsDir() {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"message": "指定されたパスはディレクトリです。ファイルを選択してください",
+		})
+		return
+	}
+
+	// Check file extension
+	if !config.IsValidModelExtension(expandedPath) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"message": "モデルファイルは .bin または .gguf 拡張子である必要があります",
+		})
+		return
+	}
+
+	// Valid model file
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"valid":   true,
+		"message": "モデルファイルは有効です",
+		"path":    expandedPath,
+		"name":    filepath.Base(expandedPath),
+		"size":    formatSize(info.Size()),
+	})
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -30,11 +31,20 @@ type HotkeyConfig struct {
 	Key    string `json:"key"` // e.g., "Space"
 }
 
+// IsValidModelExtension checks if the file has a valid Whisper model extension
+// Supports both .bin (current official format) and .gguf (future format)
+func IsValidModelExtension(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return ext == ".bin" || ext == ".gguf"
+}
+
+// GetRecommendedModelName returns the recommended model filename
+func GetRecommendedModelName() string {
+	return "ggml-large-v3-turbo-q5_0.bin"
+}
+
 // DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
-	homeDir, _ := os.UserHomeDir()
-	defaultModelPath := filepath.Join(homeDir, "Library", "Application Support", "EzS2T-Whisper", "models", "ggml-large-v3-turbo-q5_0.gguf")
-
 	return &Config{
 		Hotkey: HotkeyConfig{
 			Ctrl: true,
@@ -42,7 +52,7 @@ func DefaultConfig() *Config {
 			Key:  "Space",
 		},
 		RecordingMode:  "press-to-hold",
-		ModelPath:      defaultModelPath,
+		ModelPath:      "", // Empty by default - user must specify
 		Language:       "ja",
 		AudioDeviceID:  0, // Default device
 		UILanguage:     "ja",
@@ -170,4 +180,108 @@ func (c *Config) Clone() *Config {
 		MaxRecordTime:  c.MaxRecordTime,
 		PasteSplitSize: c.PasteSplitSize,
 	}
+}
+
+// ExpandPath expands ~ to home directory in file paths
+func ExpandPath(path string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+
+	// Expand ~ to home directory
+	if strings.HasPrefix(path, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory: %w", err)
+		}
+		return filepath.Join(homeDir, path[2:]), nil
+	}
+
+	// Return absolute path
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	return absPath, nil
+}
+
+// GetModelPath returns the expanded model path
+func (c *Config) GetModelPath() (string, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return ExpandPath(c.ModelPath)
+}
+
+// ValidateModelPath validates the model file path
+func (c *Config) ValidateModelPath() error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.ModelPath == "" {
+		return fmt.Errorf("model path is not set")
+	}
+
+	expandedPath, err := ExpandPath(c.ModelPath)
+	if err != nil {
+		return fmt.Errorf("failed to expand model path: %w", err)
+	}
+
+	// Check if file exists
+	info, err := os.Stat(expandedPath)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("model file not found: %s", expandedPath)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to check model file: %w", err)
+	}
+
+	// Check if it's a regular file
+	if info.IsDir() {
+		return fmt.Errorf("model path is a directory, not a file: %s", expandedPath)
+	}
+
+	// Check file extension
+	if !IsValidModelExtension(expandedPath) {
+		return fmt.Errorf("model file must have .bin or .gguf extension: %s", expandedPath)
+	}
+
+	return nil
+}
+
+// Validate validates all configuration fields
+func (c *Config) Validate() error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Validate recording mode
+	if c.RecordingMode != "press-to-hold" && c.RecordingMode != "toggle" {
+		return fmt.Errorf("invalid recording_mode: %s (must be 'press-to-hold' or 'toggle')", c.RecordingMode)
+	}
+
+	// Validate language
+	if c.Language != "ja" && c.Language != "en" {
+		return fmt.Errorf("invalid language: %s (must be 'ja' or 'en')", c.Language)
+	}
+
+	// Validate UI language
+	if c.UILanguage != "ja" && c.UILanguage != "en" {
+		return fmt.Errorf("invalid ui_language: %s (must be 'ja' or 'en')", c.UILanguage)
+	}
+
+	// Validate max record time
+	if c.MaxRecordTime <= 0 || c.MaxRecordTime > 300 {
+		return fmt.Errorf("invalid max_record_time: %d (must be between 1 and 300 seconds)", c.MaxRecordTime)
+	}
+
+	// Validate paste split size
+	if c.PasteSplitSize <= 0 || c.PasteSplitSize > 10000 {
+		return fmt.Errorf("invalid paste_split_size: %d (must be between 1 and 10000 characters)", c.PasteSplitSize)
+	}
+
+	// Model path validation is optional (can be empty for first run)
+	// Use ValidateModelPath() separately when model path is required
+
+	return nil
 }

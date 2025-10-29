@@ -1,7 +1,10 @@
 package tray
 
 import (
+	"fmt"
 	"log"
+	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/getlantern/systray"
@@ -18,22 +21,24 @@ const (
 
 // Manager manages the system tray icon and menu
 type Manager struct {
-	stateMutex      sync.RWMutex
-	state           State
-	onSettings      func()
-	onRescanModels  func()
-	onRecordTest    func()
-	onAbout         func()
-	onQuit          func()
-	menuSettings    *systray.MenuItem
-	menuRescan      *systray.MenuItem
-	menuRecordTest  *systray.MenuItem
-	menuAbout       *systray.MenuItem
-	menuQuit        *systray.MenuItem
+	stateMutex       sync.RWMutex
+	state            State
+	onReadyCallback  func()
+	onSettings       func()
+	onRescanModels   func()
+	onRecordTest     func()
+	onAbout          func()
+	onQuit           func()
+	menuSettings     *systray.MenuItem
+	menuRescan       *systray.MenuItem
+	menuRecordTest   *systray.MenuItem
+	menuAbout        *systray.MenuItem
+	menuQuit         *systray.MenuItem
 }
 
 // Config holds tray manager configuration
 type Config struct {
+	OnReady        func() // Called when systray is ready for initialization
 	OnSettings     func()
 	OnRescanModels func()
 	OnRecordTest   func()
@@ -44,12 +49,13 @@ type Config struct {
 // NewManager creates a new tray manager
 func NewManager(config Config) *Manager {
 	return &Manager{
-		state:          StateIdle,
-		onSettings:     config.OnSettings,
-		onRescanModels: config.OnRescanModels,
-		onRecordTest:   config.OnRecordTest,
-		onAbout:        config.OnAbout,
-		onQuit:         config.OnQuit,
+		state:           StateIdle,
+		onReadyCallback: config.OnReady,
+		onSettings:      config.OnSettings,
+		onRescanModels:  config.OnRescanModels,
+		onRecordTest:    config.OnRecordTest,
+		onAbout:         config.OnAbout,
+		onQuit:          config.OnQuit,
 	}
 }
 
@@ -62,6 +68,7 @@ func (m *Manager) Run() {
 func (m *Manager) onReady() {
 	// Set initial icon and tooltip
 	m.updateIcon()
+	systray.SetTitle("🎤") // テキスト表示で可視化
 	systray.SetTooltip("EzS2T-Whisper")
 
 	// Add menu items
@@ -76,6 +83,11 @@ func (m *Manager) onReady() {
 
 	// Start event loop
 	go m.handleMenuEvents()
+
+	// Call the OnReady callback if provided
+	if m.onReadyCallback != nil {
+		m.onReadyCallback()
+	}
 }
 
 // onExit is called when systray is exiting
@@ -126,12 +138,15 @@ func (m *Manager) updateIcon() {
 	switch m.state {
 	case StateIdle:
 		systray.SetIcon(getIdleIcon())
+		systray.SetTitle("🎤")
 		systray.SetTooltip("EzS2T-Whisper - 待機中")
 	case StateRecording:
 		systray.SetIcon(getRecordingIcon())
+		systray.SetTitle("🔴")
 		systray.SetTooltip("EzS2T-Whisper - 録音中")
 	case StateProcessing:
 		systray.SetIcon(getProcessingIcon())
+		systray.SetTitle("⏳")
 		systray.SetTooltip("EzS2T-Whisper - 処理中")
 	}
 }
@@ -211,11 +226,28 @@ func getProcessingIcon() []byte {
 	}
 }
 
-// ShowNotification shows a notification (placeholder)
+// ShowNotification shows a notification using macOS Notification Center
 func (m *Manager) ShowNotification(title, message string) {
-	// systray doesn't have built-in notification support
-	// We'll use osascript for macOS notifications
 	log.Printf("Notification: %s - %s", title, message)
+
+	// macOS通知センターを使用
+	script := fmt.Sprintf(`display notification "%s" with title "%s"`,
+		escapeAppleScript(message),
+		escapeAppleScript(title))
+	exec.Command("osascript", "-e", script).Run()
+}
+
+// escapeAppleScript escapes special characters for AppleScript
+func escapeAppleScript(s string) string {
+	// Escape backslashes first to avoid double-escaping
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	// Escape double quotes
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	// Escape control characters
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	return s
 }
 
 // ShowError shows an error notification
