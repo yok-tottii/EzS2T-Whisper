@@ -131,7 +131,7 @@
             <div class="form-group">
                 <label for="hotkey-display">録音開始キー</label>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="text" id="hotkey-display" value="⌃⌥Space" readonly style="flex: 1;">
+                    <input type="text" id="hotkey-display" value="⌃⌥␣" readonly style="flex: 1;">
                     <button type="button" onclick="openHotkeyEditor()">変更...</button>
                 </div>
                 <div id="hotkey-conflict" style="margin-top: 8px; font-size: 12px; color: #d70015; display: none;"></div>
@@ -436,6 +436,17 @@
             input.addEventListener('keydown', handleKeyDown);
         }
 
+        // Format key name with special key symbols
+        function formatKeyName(key) {
+            const keySymbols = {
+                'Space': '␣',
+                'Return': '⏎',
+                'Tab': '⇥',
+                'Escape': 'ESC'
+            };
+            return keySymbols[key] || key;
+        }
+
         // Format hotkey for display
         function formatHotkeyDisplay(hk) {
             let result = '';
@@ -443,7 +454,7 @@
             if (hk.shift) result += '⇧';
             if (hk.alt) result += '⌥';
             if (hk.cmd) result += '⌘';
-            result += hk.key;
+            result += formatKeyName(hk.key);
             return result;
         }
 
