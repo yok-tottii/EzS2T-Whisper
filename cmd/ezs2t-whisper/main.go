@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/yok-tottii/EzS2T-Whisper/internal/api"
@@ -208,11 +211,27 @@ func (a *App) onReady() {
 
 	a.logger.Info("アプリケーション初期化完了")
 
+	// HTTPサーバーを起動
+	if err := a.httpServer.Start(); err != nil {
+		a.logger.Error("HTTPサーバーの起動に失敗: %v", err)
+		a.trayMgr.ShowError("設定画面の起動に失敗しました")
+	}
+
+	// シグナルハンドリングを設定（Ctrl+Cでの適切な終了処理）
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		a.logger.Info("終了シグナルを受信しました")
+		a.handleQuit()
+		a.trayMgr.Quit() // systray.Quit()を呼び出してsystray.Run()を終了
+	}()
+
 	// ターミナルに設定画面URLを常に表示
 	fmt.Println("\n" + "==========================================================")
 	fmt.Println("✅ EzS2T-Whisper が起動しました")
 	fmt.Println("==========================================================")
-	fmt.Printf("📝 設定画面URL: http://127.0.0.1:18765\n")
+	fmt.Printf("📝 設定画面URL: %s\n", a.httpServer.URL())
 	fmt.Printf("🎤 メニューバーのアイコン（🎤）をクリックしてメニューを開けます\n")
 
 	// 現在のホットキー設定を表示
@@ -330,14 +349,11 @@ func (a *App) hotkeyEventLoop() {
 func (a *App) handleOpenSettings() {
 	a.logger.Info("設定画面を開く要求")
 
-	// HTTPサーバーが起動していない場合は起動
+	// サーバーが起動していない場合はエラー
 	if !a.httpServer.IsRunning() {
-		if err := a.httpServer.Start(); err != nil {
-			a.logger.Error("HTTPサーバーの起動に失敗: %v", err)
-			a.trayMgr.ShowError(fmt.Sprintf("設定画面の起動に失敗: %v", err))
-			return
-		}
-		a.logger.Info("HTTPサーバー起動完了: %s", a.httpServer.URL())
+		a.logger.Error("HTTPサーバーが起動していません")
+		a.trayMgr.ShowError("設定画面が利用できません。アプリケーションを再起動してください。")
+		return
 	}
 
 	// ブラウザで設定画面を開く

@@ -37,7 +37,7 @@ type Config struct {
 // DefaultConfig returns the default server configuration
 func DefaultConfig() Config {
 	return Config{
-		Port:            18765, // Default port
+		Port:            0, // 0 = OS assigns available port automatically
 		ReadTimeout:     10 * time.Second,
 		WriteTimeout:    10 * time.Second,
 		ShutdownTimeout: 5 * time.Second,
