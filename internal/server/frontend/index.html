@@ -254,7 +254,13 @@
                 'modal.conflict_warning': '競合検出:',
                 'modal.button_save': '保存',
                 'modal.button_cancel': 'キャンセル',
-                'footer': 'EzS2T-Whisper v0.3.0 | オープンソース (MIT License)'
+                'footer': 'EzS2T-Whisper v0.3.0 | オープンソース (MIT License)',
+                // キー名翻訳
+                'key.space': 'スペース',
+                'key.return': 'Enter',
+                'key.tab': 'Tab',
+                'key.escape': 'Esc',
+                'key.delete': 'Delete'
             },
             en: {
                 'page.title': 'EzS2T-Whisper Settings',
@@ -293,7 +299,13 @@
                 'modal.conflict_warning': 'Conflict Detected:',
                 'modal.button_save': 'Save',
                 'modal.button_cancel': 'Cancel',
-                'footer': 'EzS2T-Whisper v0.3.0 | Open Source (MIT License)'
+                'footer': 'EzS2T-Whisper v0.3.0 | Open Source (MIT License)',
+                // Key name translations
+                'key.space': 'Space',
+                'key.return': 'Return',
+                'key.tab': 'Tab',
+                'key.escape': 'Esc',
+                'key.delete': 'Delete'
             }
         };
 
@@ -613,10 +625,6 @@
                         capturedHotkey.key = e.key;
                     }
 
-                    // デバッグログ: キャプチャされたキー情報を出力
-                    console.log('Captured key:', e.key, '→', capturedHotkey.key);
-                    console.log('Full hotkey:', JSON.stringify(capturedHotkey));
-
                     // Update display
                     input.value = formatHotkeyDisplay(capturedHotkey);
 
@@ -631,15 +639,22 @@
             input.addEventListener('keydown', handleKeyDown);
         }
 
-        // Format key name with special key symbols
+        // Format key name with localized strings
         function formatKeyName(key) {
-            const keySymbols = {
-                'Space': '␣',
-                'Return': '⏎',
-                'Tab': '⇥',
-                'Escape': 'ESC'
+            // Map key names to translation keys
+            const keyTranslations = {
+                'Space': 'key.space',
+                'Return': 'key.return',
+                'Tab': 'key.tab',
+                'Escape': 'key.escape',
+                'Delete': 'key.delete'
             };
-            return keySymbols[key] || key;
+
+            // Use translation if available, otherwise use the key as-is
+            if (keyTranslations[key]) {
+                return t(keyTranslations[key]);
+            }
+            return key; // For A-Z, 0-9, etc.
         }
 
         // Format hotkey for display
