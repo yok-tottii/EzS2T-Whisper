@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -47,8 +48,9 @@ type App struct {
 	modelLoaded bool
 	isFirstRun  bool
 
-	shutdownOnce       sync.Once     // 終了処理が一度だけ実行されることを保証
+	shutdownOnce       sync.Once      // 終了処理が一度だけ実行されることを保証
 	hotkeyEventLoopWg  sync.WaitGroup // ホットキーイベントループの終了を待つ
+	reloadHotkeyMutex  sync.Mutex     // ReloadHotkey() の並行実行を防止
 }
 
 func init() {
@@ -574,6 +576,10 @@ func (a *App) cleanupResources() {
 
 // ReloadHotkey は設定ファイルから読み込んだ内容で、ホットキーを再登録する
 func (a *App) ReloadHotkey() error {
+	// 並行実行を防止
+	a.reloadHotkeyMutex.Lock()
+	defer a.reloadHotkeyMutex.Unlock()
+
 	a.logger.Info("ホットキー再登録要求")
 
 	// 権限チェック
@@ -604,6 +610,17 @@ func (a *App) ReloadHotkey() error {
 
 	a.logger.Info("新しいホットキー設定: Modifiers=%v, Key=%v", newConfig.Modifiers, newConfig.Key)
 
+	// 現在の設定と比較（同じ場合はスキップ）
+	if a.hotkeyMgr.IsRunning() {
+		currentConfig := a.hotkeyMgr.GetConfig()
+		if reflect.DeepEqual(currentConfig, newConfig) {
+			a.logger.Info("ホットキー設定に変更がないため、再登録をスキップします")
+			// 設定ファイルだけは更新しておく
+			a.config = freshConfig
+			return nil
+		}
+	}
+
 	// 既存の設定をバックアップ（ロールバック用）
 	var oldConfig hotkey.Config
 	needsRollback := false
@@ -615,8 +632,9 @@ func (a *App) ReloadHotkey() error {
 		needsRollback = true
 
 		if err := a.hotkeyMgr.Close(); err != nil {
-			a.logger.Error("既存のホットキー解除に失敗: %v", err)
-			return fmt.Errorf("既存のホットキー解除に失敗: %w", err)
+			// Close() のエラーはログに記録するが、処理は継続
+			// hotkey.go の修正により、エラーが発生しても m.running = false になる
+			a.logger.Warn("既存のホットキー解除時に警告: %v (処理は継続します)", err)
 		}
 
 		// イベントループが完全に終了するまで待機

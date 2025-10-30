@@ -149,6 +149,8 @@ func (m *Manager) Close() error {
 		return nil
 	}
 
+	var unregisterErr error
+
 	// Signal the listener to stop
 	close(m.stopChan)
 
@@ -156,9 +158,10 @@ func (m *Manager) Close() error {
 	m.wg.Wait()
 
 	// Unregister the hotkey
+	// 注意: エラーが発生しても続行し、必ずクリーンアップを実行する
 	if m.hk != nil {
 		if err := m.hk.Unregister(); err != nil {
-			return fmt.Errorf("failed to unregister hotkey: %w", err)
+			unregisterErr = fmt.Errorf("failed to unregister hotkey: %w", err)
 		}
 	}
 
@@ -168,8 +171,11 @@ func (m *Manager) Close() error {
 		m.eventChan = nil
 	}
 
+	// 必ず running フラグを false にセット
+	// これにより、Unregister() が失敗しても次の Register() が可能になる
 	m.running = false
-	return nil
+
+	return unregisterErr
 }
 
 // IsRunning returns whether the hotkey is currently registered and running
