@@ -80,6 +80,11 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	// ホットキー設定の検証と修正
+	if config.Hotkey.Key == "" {
+		config.Hotkey.Key = "Space" // デフォルト値で補完
+	}
+
 	return &config, nil
 }
 
@@ -157,6 +162,25 @@ func (c *Config) Update(updates map[string]interface{}) error {
 		case "paste_split_size":
 			if v, ok := value.(float64); ok {
 				c.PasteSplitSize = int(v)
+			}
+		case "hotkey":
+			if v, ok := value.(map[string]interface{}); ok {
+				// HotkeyConfigの各フィールドを更新
+				if ctrl, ok := v["ctrl"].(bool); ok {
+					c.Hotkey.Ctrl = ctrl
+				}
+				if shift, ok := v["shift"].(bool); ok {
+					c.Hotkey.Shift = shift
+				}
+				if alt, ok := v["alt"].(bool); ok {
+					c.Hotkey.Alt = alt
+				}
+				if cmd, ok := v["cmd"].(bool); ok {
+					c.Hotkey.Cmd = cmd
+				}
+				if key, ok := v["key"].(string); ok {
+					c.Hotkey.Key = key
+				}
 			}
 		}
 	}

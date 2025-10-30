@@ -613,6 +613,10 @@
                         capturedHotkey.key = e.key;
                     }
 
+                    // デバッグログ: キャプチャされたキー情報を出力
+                    console.log('Captured key:', e.key, '→', capturedHotkey.key);
+                    console.log('Full hotkey:', JSON.stringify(capturedHotkey));
+
                     // Update display
                     input.value = formatHotkeyDisplay(capturedHotkey);
 
@@ -645,7 +649,10 @@
             if (hk.shift) result += '⇧';
             if (hk.alt) result += '⌥';
             if (hk.cmd) result += '⌘';
-            result += formatKeyName(hk.key);
+
+            // 防御的処理: keyが空またはundefinedの場合はデフォルト値を使用
+            const keyName = hk.key || 'Space';
+            result += formatKeyName(keyName);
             return result;
         }
 

@@ -151,6 +151,10 @@ func (h *Handler) handleHotkeyRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// デバッグログ: 受信したホットキー情報を出力
+	fmt.Printf("DEBUG: Received hotkey config: Ctrl=%v, Shift=%v, Alt=%v, Cmd=%v, Key=%q\n",
+		hotkey.Ctrl, hotkey.Shift, hotkey.Alt, hotkey.Cmd, hotkey.Key)
+
 	// Validate hotkey configuration
 	if hotkey.Key == "" {
 		http.Error(w, "Key cannot be empty", http.StatusBadRequest)
