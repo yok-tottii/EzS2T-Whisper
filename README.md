@@ -468,9 +468,9 @@ golangci-lint run ./...
 
 使用アイコン：
 
-- `speech_to_text` - 待機状態
-- `graphic_eq` - 録音中
-- `hourglass_empty` - 処理中
+- ![speech_to_text](assets/icon/speech_to_text_32dp_E3E3E3_FILL0_wght400_GRAD0_opsz40.png) `speech_to_text` - 待機状態
+- ![graphic_eq](assets/icon/graphic_eq_32dp_F19E39_FILL0_wght400_GRAD0_opsz40.png) `graphic_eq` - 録音中
+- ![hourglass_empty](assets/icon/hourglass_empty_32dp_75FB4C_FILL0_wght400_GRAD0_opsz40.png) `hourglass_empty` - 処理中
 
 ---
 
