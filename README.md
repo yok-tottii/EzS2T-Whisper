@@ -169,14 +169,14 @@ git clone https://github.com/ggerganov/whisper.cpp.git
 cd whisper.cpp
 
 # 推奨モデルをダウンロード
-./models/download-ggml-model.sh large-v3-turbo
+./models/download-ggml-model.sh large-v3-turbo-q5_0
 
 # ダウンロードされたモデルは whisper.cpp/models/ ディレクトリに保存されます
 # 設定画面の「参照...」ボタンから選択するか、以下のコマンドで専用ディレクトリにコピー
 
 # （オプション）専用ディレクトリにコピーする場合
 mkdir -p ~/Library/Application\ Support/EzS2T-Whisper/models/
-cp models/ggml-large-v3-turbo.bin ~/Library/Application\ Support/EzS2T-Whisper/models/
+cp models/ggml-large-v3-turbo-q5_0.bin ~/Library/Application\ Support/EzS2T-Whisper/models/
 ```
 
 **ヒント**:
