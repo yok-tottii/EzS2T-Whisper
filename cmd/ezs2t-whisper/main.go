@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -45,6 +46,9 @@ type App struct {
 	accGranted  bool
 	modelLoaded bool
 	isFirstRun  bool
+
+	shutdownOnce       sync.Once     // 終了処理が一度だけ実行されることを保証
+	hotkeyEventLoopWg  sync.WaitGroup // ホットキーイベントループの終了を待つ
 }
 
 func init() {
@@ -228,8 +232,7 @@ func (a *App) onReady() {
 	go func() {
 		<-sigChan
 		a.logger.Info("終了シグナルを受信しました")
-		a.handleQuit()
-		a.trayMgr.Quit() // systray.Quit()を呼び出してsystray.Run()を終了
+		a.shutdown()
 	}()
 
 	// ターミナルに設定画面URLを常に表示
@@ -240,16 +243,23 @@ func (a *App) onReady() {
 	fmt.Printf("[操作] メニューバーのアイコンをクリックしてメニューを開けます\n")
 
 	// 現在のホットキー設定を表示
-	currentHotkey := a.hotkeyMgr.GetConfig()
-	hotkeyDisplay := hotkey.FormatHotkey(currentHotkey.Modifiers, currentHotkey.Key)
-	fmt.Printf("[設定] ホットキー: %s\n", hotkeyDisplay)
+	if a.hotkeyMgr != nil {
+		currentHotkey := a.hotkeyMgr.GetConfig()
+		hotkeyDisplay := hotkey.FormatHotkey(currentHotkey.Modifiers, currentHotkey.Key)
+		fmt.Printf("[設定] ホットキー: %s\n", hotkeyDisplay)
+	} else {
+		fmt.Printf("[設定] ホットキー: 無効 (アクセシビリティ権限が必要)\n")
+	}
 
 	fmt.Printf("[終了] Ctrl+C またはメニューから「終了」\n")
-	fmt.Println("==========================================================" + "\n")
+	fmt.Println("==========================================================")
 }
 
 // hotkeyEventLoop はホットキーイベントを処理するループ
 func (a *App) hotkeyEventLoop() {
+	a.hotkeyEventLoopWg.Add(1)
+	defer a.hotkeyEventLoopWg.Done()
+
 	a.logger.Info("ホットキーイベントループ開始")
 
 	eventChan := a.hotkeyMgr.Events()
@@ -508,28 +518,58 @@ func (a *App) handleAbout() {
 	go exec.Command("osascript", "-e", script).Run()
 }
 
-// handleQuit はアプリケーションを終了
-func (a *App) handleQuit() {
-	a.logger.Info("終了要求")
+// shutdown は終了処理を一度だけ実行し、systrayを終了する
+func (a *App) shutdown() {
+	a.shutdownOnce.Do(func() {
+		a.cleanupResources()
+		a.trayMgr.Quit() // systray.Quit()を呼び出してsystray.Run()を終了
+	})
+}
 
-	// HTTPサーバーを停止
+// handleQuit はメニューからの終了要求を処理
+func (a *App) handleQuit() {
+	a.shutdown()
+}
+
+// cleanupResources はアプリケーションリソースをクリーンアップ
+// クリーンアップの順序は依存関係を考慮して以下の通り:
+// 1. ホットキーマネージャー: 新しいホットキーイベントを受け付けない
+// 2. オーディオドライバ: 録音中の処理を停止（ホットキーイベントから使用される）
+// 3. HTTPサーバー: 設定画面へのアクセスを遮断（他の機能と独立）
+func (a *App) cleanupResources() {
+	a.logger.Info("終了処理開始")
+
+	// 1. ホットキーマネージャーをクローズ（新しい入力を受け付けない）
+	if a.hotkeyMgr != nil {
+		a.logger.Info("ホットキーマネージャーをクローズ中...")
+		if err := a.hotkeyMgr.Close(); err != nil {
+			a.logger.Error("ホットキーマネージャーのクローズに失敗: %v", err)
+		} else {
+			// イベントループが完全に終了するまで待機
+			// これにより、録音中の処理が完了してからオーディオドライバをクローズできる
+			a.logger.Info("ホットキーイベントループの終了を待機中...")
+			a.hotkeyEventLoopWg.Wait()
+			a.logger.Info("ホットキーイベントループが終了しました")
+		}
+	}
+
+	// 2. オーディオドライバをクローズ（録音を停止）
+	if a.audioDriver != nil {
+		a.logger.Info("オーディオドライバをクローズ中...")
+		if err := a.audioDriver.Close(); err != nil {
+			a.logger.Error("オーディオドライバのクローズに失敗: %v", err)
+		}
+	}
+
+	// 3. HTTPサーバーを停止（設定画面へのアクセスを遮断）
 	if a.httpServer != nil && a.httpServer.IsRunning() {
+		a.logger.Info("HTTPサーバーを停止中...")
 		if err := a.httpServer.Stop(); err != nil {
 			a.logger.Error("HTTPサーバーの停止に失敗: %v", err)
 		}
 	}
 
-	// ホットキーマネージャーをクローズ
-	if a.hotkeyMgr != nil {
-		a.hotkeyMgr.Close()
-	}
-
-	// オーディオドライバをクローズ
-	if a.audioDriver != nil {
-		a.audioDriver.Close()
-	}
-
-	a.logger.Info("アプリケーション終了")
+	a.logger.Info("リソースのクリーンアップ完了")
 }
 
 // ReloadHotkey は設定ファイルから読み込んだ内容で、ホットキーを再登録する
@@ -539,12 +579,12 @@ func (a *App) ReloadHotkey() error {
 	// 権限チェック
 	if !a.accGranted {
 		a.logger.Warn("ホットキー再登録: アクセシビリティ権限がありません")
-		return fmt.Errorf("accessibility permission not granted")
+		return fmt.Errorf("アクセシビリティ権限が付与されていません")
 	}
 
 	if a.hotkeyMgr == nil {
 		a.logger.Warn("ホットキー再登録: ホットキーマネージャーが初期化されていません")
-		return fmt.Errorf("hotkey manager not initialized")
+		return fmt.Errorf("ホットキーマネージャーが初期化されていません")
 	}
 
 	// 設定ファイルを再読み込み（最新の設定を取得）
@@ -552,7 +592,7 @@ func (a *App) ReloadHotkey() error {
 	freshConfig, err := config.Load(configPath)
 	if err != nil {
 		a.logger.Error("設定ファイルの再読み込みに失敗: %v", err)
-		return fmt.Errorf("failed to reload config: %w", err)
+		return fmt.Errorf("設定ファイルの再読み込みに失敗: %w", err)
 	}
 
 	// 新しいホットキー設定を作成
@@ -576,10 +616,13 @@ func (a *App) ReloadHotkey() error {
 
 		if err := a.hotkeyMgr.Close(); err != nil {
 			a.logger.Error("既存のホットキー解除に失敗: %v", err)
-			return fmt.Errorf("failed to unregister old hotkey: %w", err)
+			return fmt.Errorf("既存のホットキー解除に失敗: %w", err)
 		}
+
 		// イベントループが完全に終了するまで待機
-		time.Sleep(200 * time.Millisecond)
+		a.logger.Info("イベントループの終了を待機中...")
+		a.hotkeyEventLoopWg.Wait()
+		a.logger.Info("イベントループが終了しました")
 	}
 
 	// 新しいホットキーを登録
@@ -593,13 +636,13 @@ func (a *App) ReloadHotkey() error {
 			if rollbackErr := a.hotkeyMgr.Register(oldConfig); rollbackErr != nil {
 				a.logger.Error("ロールバック失敗: %v", rollbackErr)
 				a.trayMgr.ShowError("ホットキーの登録に失敗しました。アプリケーションを再起動してください。")
-				return fmt.Errorf("failed to register new hotkey and rollback failed: %w, rollback error: %v", err, rollbackErr)
+				return fmt.Errorf("新しいホットキー登録に失敗し、ロールバックも失敗しました: %w (ロールバックエラー: %v)", err, rollbackErr)
 			}
 			go a.hotkeyEventLoop()
 			a.logger.Info("ロールバック完了")
 		}
 
-		return fmt.Errorf("failed to register new hotkey: %w", err)
+		return fmt.Errorf("新しいホットキーの登録に失敗: %w", err)
 	}
 
 	// イベントループを再起動
