@@ -11,7 +11,7 @@ EzS2T-Whisperは、Whisper.cppを使用した完全オフライン音声文字�
 ## 特徴
 
 - 🔒 **完全オフライン処理**: インターネット接続なしで動作
-- ⚡ **高速**: Apple Silicon M1+でRTF < 1.0を実現
+- ⚡ **高速**: Apple Silicon専用に最適化、RTF < 1.0を実現
 - 🌍 **多言語対応**: UIは日本語・英語、音声認識はWhisper.cppにより100言語近くに対応（自動検出）
 - 🎙️ **自動貼り付け**: 文字起こし結果を自動的にペースト
 - 🔐 **プライバシー重視**: すべての処理をローカルで完結
@@ -23,12 +23,12 @@ EzS2T-Whisperは、Whisper.cppを使用した完全オフライン音声文字�
 ## システム要件
 
 - **OS**: macOS 11 (Big Sur) 以上
-- **推奨**: Apple Silicon (M1/M2/M3/M4)
-- **Intel Mac**: サポート（パフォーマンスは劣る）
+- **CPU**: Apple Silicon (M1/M2/M3/M4) **専用**
+- **Intel Mac**: 非対応
 - **メモリ**: 8GB以上推奨
 - **ディスク**: 2GB以上の空き容量
 
-**注**: このアプリケーションはGo言語で開発されていますが、現状はmacOS固有のAPI（NSPasteboard、AVFoundation、ApplicationServices等）に依存しているため、Windows/Linuxでの動作は未検証です。
+**重要**: このアプリケーションはApple Silicon専用です。Intel Macでは動作テストを行っておらず、動作保証はありません。また、macOS固有のAPI（NSPasteboard、AVFoundation、ApplicationServices等）に依存しているため、Windows/Linuxでの動作も未検証です。
 
 ## インストール
 
@@ -119,15 +119,15 @@ EzS2T-Whisperは**changeCount方式**を採用し、ユーザーのクリップ�
 
 - **`ggml-large-v3-turbo-q5_0.bin`** (~1.5GB)
   - 用途: 高精度な音声文字起こし（ASR専用、翻訳なし）
-  - 推奨: Apple Silicon M1以上
+  - 対象: Apple Silicon M1以上
   - RTF < 0.5 (Apple Silicon M1+)
 
 ### 軽量モデル
 
 - **`ggml-small-q5_1.bin`** (~200MB)
-  - 用途: バッテリー節約、低性能端末向け
-  - 推奨: Intel Mac
-  - 発熱抑制、軽量動作
+  - 用途: バッテリー節約、発熱抑制が必要な場合
+  - 対象: Apple Silicon（省電力モード）
+  - 軽量動作、発熱抑制
 
 ### モデル配置先
 
