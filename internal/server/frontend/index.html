@@ -613,7 +613,7 @@
                 // Record regular key
                 if (e.key && !['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
                     // Convert key name
-                    if (e.key === ' ') {
+                    if (e.key === ' ' || e.key === '\u00a0') {  // 通常のスペースまたはNBSP（macOS IME対応）
                         capturedHotkey.key = 'Space';
                     } else if (e.key === 'Enter') {
                         capturedHotkey.key = 'Return';
@@ -641,6 +641,11 @@
 
         // Format key name with localized strings
         function formatKeyName(key) {
+            // NBSP正規化: macOS IMEでスペースキーを押すとNBSP（U+00A0）が送信されることがあるため
+            if (key === '\u00a0') {
+                key = 'Space';
+            }
+
             // Map key names to translation keys
             const keyTranslations = {
                 'Space': 'key.space',

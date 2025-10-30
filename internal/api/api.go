@@ -577,6 +577,11 @@ func hotkeyConfigToModifiers(hkConfig config.HotkeyConfig) []hk.Modifier {
 
 // stringToKeyCode は文字列をキーコードに変換
 func stringToKeyCode(keyStr string) hk.Key {
+	// NBSP正規化: macOS IMEでスペースキーを押すとNBSP（U+00A0）が送信されることがあるため
+	if keyStr == "\u00a0" {
+		keyStr = "Space"
+	}
+
 	keyMap := map[string]hk.Key{
 		"Space":  hk.KeySpace,
 		"A":      hk.KeyA,
