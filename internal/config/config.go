@@ -14,7 +14,7 @@ type Config struct {
 	Hotkey        HotkeyConfig `json:"hotkey"`
 	RecordingMode string       `json:"recording_mode"` // "press-to-hold" or "toggle"
 	ModelPath     string       `json:"model_path"`
-	Language      string       `json:"language"` // "ja" or "en"
+	Language      string       `json:"language"` // "auto" for automatic detection, or specific language code
 	AudioDeviceID int          `json:"audio_device_id"`
 	UILanguage    string       `json:"ui_language"` // "ja" or "en"
 	MaxRecordTime int          `json:"max_record_time"` // seconds
@@ -53,7 +53,7 @@ func DefaultConfig() *Config {
 		},
 		RecordingMode:  "press-to-hold",
 		ModelPath:      "", // Empty by default - user must specify
-		Language:       "ja",
+		Language:       "auto", // Automatic language detection
 		AudioDeviceID:  -1, // -1 means use system default device
 		UILanguage:     "ja",
 		MaxRecordTime:  60, // 60 seconds
@@ -135,9 +135,8 @@ func (c *Config) Update(updates map[string]interface{}) error {
 			}
 		case "language":
 			if v, ok := value.(string); ok {
-				if v != "ja" && v != "en" {
-					return fmt.Errorf("invalid language: %s", v)
-				}
+				// Allow any language code - Whisper.cpp supports 100+ languages
+				// "auto" enables automatic language detection
 				c.Language = v
 			}
 		case "audio_device_id":
@@ -260,9 +259,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid recording_mode: %s (must be 'press-to-hold' or 'toggle')", c.RecordingMode)
 	}
 
-	// Validate language
-	if c.Language != "ja" && c.Language != "en" {
-		return fmt.Errorf("invalid language: %s (must be 'ja' or 'en')", c.Language)
+	// Validate language (allow any non-empty value - Whisper.cpp supports 100+ languages)
+	// "auto" enables automatic language detection
+	if c.Language == "" {
+		return fmt.Errorf("language cannot be empty")
 	}
 
 	// Validate UI language

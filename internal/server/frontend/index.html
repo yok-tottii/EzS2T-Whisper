@@ -181,12 +181,9 @@
                 <div id="model-info" style="margin-top: 8px; font-size: 12px; color: #6e6e73;"></div>
                 <div id="model-error" style="margin-top: 8px; font-size: 12px; color: #d70015; display: none;"></div>
             </div>
-            <div class="form-group">
-                <label for="language" data-i18n="label.language">言語</label>
-                <select id="language">
-                    <option value="ja">日本語</option>
-                    <option value="en">English</option>
-                </select>
+            <div style="padding: 12px; background: #f5f5f7; border-radius: 8px; font-size: 14px; color: #6e6e73;">
+                <strong data-i18n="info.language_detection">🌍 言語自動検出:</strong>
+                <span data-i18n="info.language_description">Whisper.cppにより話者の入力から自動的に言語を判断します（100言語近くに対応）</span>
             </div>
         </div>
 
@@ -235,9 +232,10 @@
                 'label.hotkey_current': '録音開始キー',
                 'label.record_mode': '録音モード',
                 'label.model_path': 'モデルファイル',
-                'label.language': '言語',
                 'label.audio_device': '入力デバイス',
                 'label.ui_language': 'UI言語',
+                'info.language_detection': '🌍 言語自動検出:',
+                'info.language_description': 'Whisper.cppにより話者の入力から自動的に言語を判断します（100言語近くに対応）',
                 'button.change': '変更...',
                 'button.browse': '参照...',
                 'button.save': '設定を保存',
@@ -273,9 +271,10 @@
                 'label.hotkey_current': 'Recording Hotkey',
                 'label.record_mode': 'Recording Mode',
                 'label.model_path': 'Model File',
-                'label.language': 'Language',
                 'label.audio_device': 'Input Device',
                 'label.ui_language': 'UI Language',
+                'info.language_detection': '🌍 Automatic Language Detection:',
+                'info.language_description': 'Whisper.cpp automatically detects the language from speaker input (supports nearly 100 languages)',
                 'button.change': 'Change...',
                 'button.browse': 'Browse...',
                 'button.save': 'Save Settings',
@@ -365,7 +364,6 @@
 
                 // Populate form fields
                 document.getElementById('record-mode').value = config.recording_mode || 'press-to-hold';
-                document.getElementById('language').value = config.language || 'ja';
                 document.getElementById('model-path').value = config.model_path || '';
 
                 // Display hotkey
@@ -512,7 +510,6 @@
         async function saveSettings() {
             const modelPath = document.getElementById('model-path').value;
             const recordMode = document.getElementById('record-mode').value;
-            const language = document.getElementById('language').value;
             const audioDeviceId = parseInt(document.getElementById('audio-device').value);
             const uiLanguage = document.getElementById('ui-language')?.value || 'ja';
 
@@ -547,7 +544,7 @@
                     body: JSON.stringify({
                         model_path: modelPath,
                         recording_mode: recordMode,
-                        language: language,
+                        language: 'auto',  // Always use automatic language detection
                         audio_device_id: audioDeviceId,
                         ui_language: uiLanguage
                     })

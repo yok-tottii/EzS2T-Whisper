@@ -12,10 +12,10 @@ EzS2T-Whisperは、Whisper.cppを使用した完全オフライン音声文字�
 
 - 🔒 **完全オフライン処理**: インターネット接続なしで動作
 - ⚡ **高速**: Apple Silicon M1+でRTF < 1.0を実現
-- 🌍 **多言語対応**: 日本語（デフォルト）と英語の音声認識
+- 🌍 **多言語対応**: UIは日本語・英語、音声認識はWhisper.cppにより100言語近くに対応（自動検出）
 - 🎙️ **自動貼り付け**: 文字起こし結果を自動的にペースト
 - 🔐 **プライバシー重視**: すべての処理をローカルで完結
-- 🎛️ **カスタマイズ可能**: ホットキー、モデル、言語、マイクデバイスを自由に設定
+- 🎛️ **カスタマイズ可能**: ホットキー、モデル、マイクデバイスを自由に設定
 - 🌐 **多言語UI**: 日本語・英語のUI言語切り替えに対応
 - 🔄 **安全なクリップボード復元**: changeCount方式で元のクリップボード内容を保護
 - ⚙️ **ホットキー競合チェック**: Spotlight、Alfred、Raycast等との競合を検出
@@ -27,6 +27,8 @@ EzS2T-Whisperは、Whisper.cppを使用した完全オフライン音声文字�
 - **Intel Mac**: サポート（パフォーマンスは劣る）
 - **メモリ**: 8GB以上推奨
 - **ディスク**: 2GB以上の空き容量
+
+**注**: このアプリケーションはGo言語で開発されていますが、現状はmacOS固有のAPI（NSPasteboard、AVFoundation、ApplicationServices等）に依存しているため、Windows/Linuxでの動作は未検証です。
 
 ## インストール
 
@@ -92,9 +94,10 @@ go build -ldflags="-s -w" -o ezs2t-whisper ./cmd/ezs2t-whisper
 - **ホットキー設定**: 録音開始のキーコンビネーションをカスタマイズ
 - **録音モード**: 押下中録音 / トグル切替を選択
 - **モデル選択**: 推奨モデルまたはカスタムモデルを選択
-- **音声認識言語**: 日本語（ja）/ 英語（en）
 - **マイクデバイス選択**: システムデフォルトまたは利用可能なデバイスを選択
 - **UI言語**: 設定画面の表示言語（日本語 / English）
+
+**音声認識**: Whisper.cppにより話者の入力から自動的に言語を判断します（100言語近くに対応）
 
 ### 録音モード
 
@@ -292,13 +295,15 @@ Whisper.cppが正しくビルドされていません。[Whisper.cpp](https://gi
   },
   "recording_mode": "press-to-hold",
   "model_path": "~/Library/Application Support/EzS2T-Whisper/models/ggml-large-v3-turbo-q5_0.bin",
-  "language": "ja",
+  "language": "auto",
   "audio_device_id": -1,
   "ui_language": "ja",
   "max_record_time": 60,
   "paste_split_size": 500
 }
 ```
+
+**注**: `language` フィールドは自動検出のため `"auto"` に設定されています。特定の言語コード（例: `"ja"`, `"en"`, `"zh"` など）を指定することも可能です。
 
 ## ログ
 
@@ -453,6 +458,10 @@ golangci-lint run ./...
 - [gordonklaus/portaudio](https://github.com/gordonklaus/portaudio) - オーディオ入力
 - [Material Symbols and Icons](https://fonts.google.com/icons) (Apache 2.0) - システムトレイアイコン
 
+### 開発支援ツール
+
+このプロジェクトは、[Claude Code](https://claude.com/claude-code) と [CodeRabbit](https://coderabbit.ai) の支援によりほぼ100%開発されました。これらの強力な開発支援ツールなしには、このプロジェクトの実現は困難でした。心より感謝申し上げます。
+
 ## アイコン
 
 システムトレイアイコンには、Googleの [Material Symbols and Icons](https://fonts.google.com/icons) を使用しています（Apache License 2.0）。
@@ -465,4 +474,3 @@ golangci-lint run ./...
 
 ---
 
-Made with ❤️ for macOS

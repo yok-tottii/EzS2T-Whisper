@@ -33,15 +33,15 @@ type WhisperRecognizer struct {
 
 // Config holds recognition configuration
 type Config struct {
-	Language string // Default: "ja"
+	Language string // Default: "auto" (automatic language detection)
 	Threads  int    // Number of threads, 0 = auto
 }
 
 // DefaultConfig returns the default recognition configuration
 func DefaultConfig() Config {
 	return Config{
-		Language: "ja",
-		Threads:  0, // Auto-detect
+		Language: "auto", // Automatic language detection
+		Threads:  0,      // Auto-detect
 	}
 }
 

@@ -25,7 +25,7 @@ import (
 	hk "golang.design/x/hotkey"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 // App holds all application state
 type App struct {
