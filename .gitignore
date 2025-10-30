@@ -38,3 +38,4 @@ config.json
 .claude/
 specs
 CLAUDE.md
+.mcp*

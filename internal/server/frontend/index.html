@@ -381,6 +381,14 @@
                 // Display hotkey
                 if (config.hotkey) {
                     document.getElementById('hotkey-display').value = formatHotkeyDisplay(config.hotkey);
+                    // Update global capturedHotkey variable
+                    capturedHotkey = {
+                        ctrl: config.hotkey.ctrl || false,
+                        shift: config.hotkey.shift || false,
+                        alt: config.hotkey.alt || false,
+                        cmd: config.hotkey.cmd || false,
+                        key: config.hotkey.key || ''
+                    };
                 }
 
                 // Load audio devices
@@ -583,23 +591,70 @@
         };
 
         // Open hotkey editor modal
-        function openHotkeyEditor() {
+        async function openHotkeyEditor() {
             document.getElementById('hotkey-modal').style.display = 'flex';
-            document.getElementById('hotkey-input').value = '';
             document.getElementById('hotkey-modal-conflict').style.display = 'none';
-            capturedHotkey = { ctrl: false, shift: false, alt: false, cmd: false, key: '' };
+
+            // Show current hotkey setting in the input field
+            const input = document.getElementById('hotkey-input');
+            if (capturedHotkey.key) {
+                input.value = formatHotkeyDisplay(capturedHotkey);
+            } else {
+                input.value = '';
+            }
+
+            // Do not reset capturedHotkey - keep current settings
+
+            // Disable global hotkey while modal is open
+            try {
+                await fetch(`${API_BASE}/api/hotkey/disable`, {
+                    method: 'POST'
+                });
+                console.log('Hotkey disabled for settings modal');
+            } catch (error) {
+                console.error('Failed to disable hotkey:', error);
+            }
         }
 
         // Close hotkey editor modal
-        function closeHotkeyEditor() {
+        async function closeHotkeyEditor() {
+            const input = document.getElementById('hotkey-input');
+
+            // Remove event listener to prevent memory leaks
+            if (input._hotkeyListener) {
+                input.removeEventListener('keydown', input._hotkeyListener);
+                input._hotkeyListener = null;
+            }
+
             document.getElementById('hotkey-modal').style.display = 'none';
+
+            // Re-enable global hotkey when modal is closed
+            try {
+                await fetch(`${API_BASE}/api/hotkey/enable`, {
+                    method: 'POST'
+                });
+                console.log('Hotkey re-enabled after closing settings modal');
+            } catch (error) {
+                console.error('Failed to enable hotkey:', error);
+            }
         }
 
         // Capture hotkey input
         function captureHotkey() {
             const input = document.getElementById('hotkey-input');
             input.focus();
-            input.value = 'キーを押してください...';
+
+            // Only show placeholder if no hotkey is currently set
+            // This allows users to click multiple times and try different keys
+            // without losing the current display
+            if (!capturedHotkey.key) {
+                input.value = 'キーを押してください...';
+            }
+
+            // Remove existing listener to prevent duplicates
+            if (input._hotkeyListener) {
+                input.removeEventListener('keydown', input._hotkeyListener);
+            }
 
             function handleKeyDown(e) {
                 e.preventDefault();
@@ -631,11 +686,13 @@
                     // Validate hotkey
                     validateHotkey(capturedHotkey);
 
-                    // Remove listener
-                    input.removeEventListener('keydown', handleKeyDown);
+                    // Do not remove listener - allow user to try different keys
+                    // Listener will be removed when modal is closed
                 }
             }
 
+            // Store listener reference for cleanup
+            input._hotkeyListener = handleKeyDown;
             input.addEventListener('keydown', handleKeyDown);
         }
 

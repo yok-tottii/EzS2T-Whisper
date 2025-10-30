@@ -100,7 +100,7 @@ func main() {
 
 	// HTTPサーバーの初期化
 	app.httpServer = server.New(server.DefaultConfig())
-	app.apiHandler = api.New(app.config, app.wizard, app.ReloadHotkey)
+	app.apiHandler = api.New(app.config, app.wizard, app.ReloadHotkey, app.DisableHotkey, app.EnableHotkey)
 
 	// APIルートを登録
 	app.apiHandler.RegisterRoutes(app.httpServer.GetMux())
@@ -673,6 +673,85 @@ func (a *App) ReloadHotkey() error {
 	a.logger.Info("ホットキー再登録完了: %s", hotkeyFormatted)
 	a.trayMgr.ShowNotification("ホットキー変更", fmt.Sprintf("新しいホットキー: %s", hotkeyFormatted))
 
+	return nil
+}
+
+// DisableHotkey はホットキーを一時的に無効化する（設定画面を開く際に使用）
+func (a *App) DisableHotkey() error {
+	// ReloadHotkey と同じ mutex で保護（競合状態を防ぐ）
+	a.reloadHotkeyMutex.Lock()
+	defer a.reloadHotkeyMutex.Unlock()
+
+	a.logger.Info("ホットキー一時無効化要求")
+
+	if a.hotkeyMgr == nil {
+		a.logger.Warn("ホットキー無効化: ホットキーマネージャーが初期化されていません")
+		return fmt.Errorf("ホットキーマネージャーが初期化されていません")
+	}
+
+	// ホットキーが動作していない場合は何もしない
+	if !a.hotkeyMgr.IsRunning() {
+		a.logger.Info("ホットキーは既に無効化されています")
+		return nil
+	}
+
+	// ホットキーを解除
+	a.logger.Info("ホットキーを無効化します")
+	if err := a.hotkeyMgr.Close(); err != nil {
+		a.logger.Warn("ホットキー無効化時に警告: %v (処理は継続します)", err)
+	}
+
+	// イベントループが完全に終了するまで待機
+	a.logger.Info("イベントループの終了を待機中...")
+	a.hotkeyEventLoopWg.Wait()
+	a.logger.Info("ホットキーの無効化が完了しました")
+
+	return nil
+}
+
+// EnableHotkey はホットキーを再有効化する（設定画面を閉じる際に使用）
+func (a *App) EnableHotkey() error {
+	// ReloadHotkey と同じ mutex で保護（競合状態を防ぐ）
+	a.reloadHotkeyMutex.Lock()
+	defer a.reloadHotkeyMutex.Unlock()
+
+	a.logger.Info("ホットキー再有効化要求")
+
+	// 権限チェック
+	if !a.accGranted {
+		a.logger.Warn("ホットキー再有効化: アクセシビリティ権限がありません")
+		return fmt.Errorf("アクセシビリティ権限が付与されていません")
+	}
+
+	if a.hotkeyMgr == nil {
+		a.logger.Warn("ホットキー再有効化: ホットキーマネージャーが初期化されていません")
+		return fmt.Errorf("ホットキーマネージャーが初期化されていません")
+	}
+
+	// 既に動作している場合は何もしない
+	if a.hotkeyMgr.IsRunning() {
+		a.logger.Info("ホットキーは既に有効化されています")
+		return nil
+	}
+
+	// 現在の設定でホットキーを登録
+	currentConfig := hotkey.Config{
+		Modifiers: configToModifiers(a.config.Hotkey),
+		Key:       stringToKey(a.config.Hotkey.Key),
+		Mode:      hotkey.PressToHold, // TODO: RecordingModeから決定
+	}
+
+	a.logger.Info("ホットキーを再有効化します: Modifiers=%v, Key=%v", currentConfig.Modifiers, currentConfig.Key)
+
+	if err := a.hotkeyMgr.Register(currentConfig); err != nil {
+		a.logger.Error("ホットキー再有効化に失敗: %v", err)
+		return fmt.Errorf("ホットキーの再有効化に失敗: %w", err)
+	}
+
+	// イベントループを再起動
+	go a.hotkeyEventLoop()
+
+	a.logger.Info("ホットキーの再有効化が完了しました")
 	return nil
 }
 

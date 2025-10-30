@@ -18,19 +18,23 @@ import (
 
 // Handler manages API endpoints
 type Handler struct {
-	config          *config.Config
-	wizard          *wizard.SetupWizard
-	audioDriver     audio.AudioDriver
-	onHotkeyChanged func() error // Callback to reload hotkey in main app
+	config           *config.Config
+	wizard           *wizard.SetupWizard
+	audioDriver      audio.AudioDriver
+	onHotkeyChanged  func() error // Callback to reload hotkey in main app
+	onHotkeyDisable  func() error // Callback to disable hotkey (for settings modal)
+	onHotkeyEnable   func() error // Callback to enable hotkey (for settings modal)
 }
 
 // New creates a new API handler
-func New(cfg *config.Config, wiz *wizard.SetupWizard, onHotkeyChanged func() error) *Handler {
+func New(cfg *config.Config, wiz *wizard.SetupWizard, onHotkeyChanged, onHotkeyDisable, onHotkeyEnable func() error) *Handler {
 	return &Handler{
 		config:          cfg,
 		wizard:          wiz,
 		audioDriver:     nil, // Will be set later via SetAudioDriver
 		onHotkeyChanged: onHotkeyChanged,
+		onHotkeyDisable: onHotkeyDisable,
+		onHotkeyEnable:  onHotkeyEnable,
 	}
 }
 
@@ -45,6 +49,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/settings", h.handleSettings)
 	mux.HandleFunc("/api/hotkey/validate", h.handleHotkeyValidate)
 	mux.HandleFunc("/api/hotkey/register", h.handleHotkeyRegister)
+	mux.HandleFunc("/api/hotkey/disable", h.handleHotkeyDisable)
+	mux.HandleFunc("/api/hotkey/enable", h.handleHotkeyEnable)
 	mux.HandleFunc("/api/devices", h.handleDevices)
 	mux.HandleFunc("/api/models", h.handleModels)
 	mux.HandleFunc("/api/models/rescan", h.handleModelsRescan)
@@ -196,6 +202,50 @@ func (h *Handler) handleHotkeyRegister(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "success",
 		"message": "Hotkey registered and applied successfully",
+	})
+}
+
+// handleHotkeyDisable temporarily disables the hotkey (for settings modal)
+func (h *Handler) handleHotkeyDisable(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Disable hotkey via callback
+	if h.onHotkeyDisable != nil {
+		if err := h.onHotkeyDisable(); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to disable hotkey: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "success",
+		"message": "Hotkey disabled successfully",
+	})
+}
+
+// handleHotkeyEnable re-enables the hotkey (for settings modal)
+func (h *Handler) handleHotkeyEnable(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Enable hotkey via callback
+	if h.onHotkeyEnable != nil {
+		if err := h.onHotkeyEnable(); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to enable hotkey: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "success",
+		"message": "Hotkey enabled successfully",
 	})
 }
 
