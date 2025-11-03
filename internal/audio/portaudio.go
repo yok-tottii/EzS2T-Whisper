@@ -104,6 +104,12 @@ func (d *PortAudioDriver) Initialize(config Config) error {
 		device = devices[config.DeviceID]
 	}
 
+	// Validate device has input channels
+	if device.MaxInputChannels <= 0 {
+		return fmt.Errorf("selected device '%s' (ID: %d) has no input channels (output-only device)",
+			device.Name, config.DeviceID)
+	}
+
 	// Set latency
 	var latency time.Duration
 	switch config.Latency {

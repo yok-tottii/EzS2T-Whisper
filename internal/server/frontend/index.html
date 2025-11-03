@@ -118,11 +118,17 @@
             <h2 data-i18n="section.permissions">システム権限</h2>
             <div class="form-group">
                 <label data-i18n="label.microphone">マイク</label>
-                <span class="status granted" id="mic-status">✓ <span data-i18n="label.granted">許可済み</span></span>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span class="status granted" id="mic-status">✓ <span data-i18n="label.granted">許可済み</span></span>
+                    <button id="mic-settings-btn" class="btn-secondary" style="display: none;" onclick="openMicrophoneSettings()" data-i18n="button.open_settings">システム環境設定を開く</button>
+                </div>
             </div>
             <div class="form-group">
                 <label data-i18n="label.accessibility">アクセシビリティ</label>
-                <span class="status granted" id="accessibility-status">✓ <span data-i18n="label.granted">許可済み</span></span>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span class="status granted" id="accessibility-status">✓ <span data-i18n="label.granted">許可済み</span></span>
+                    <button id="accessibility-settings-btn" class="btn-secondary" style="display: none;" onclick="openAccessibilitySettings()" data-i18n="button.open_settings">システム環境設定を開く</button>
+                </div>
             </div>
         </div>
 
@@ -239,6 +245,7 @@
                 'button.change': '変更...',
                 'button.browse': '参照...',
                 'button.save': '設定を保存',
+                'button.open_settings': 'システム環境設定を開く',
                 'placeholder.model_path': 'モデルファイルのパスを選択または入力してください',
                 'option.press_to_hold': '押下中録音',
                 'option.toggle': 'トグル切替',
@@ -284,6 +291,7 @@
                 'button.change': 'Change...',
                 'button.browse': 'Browse...',
                 'button.save': 'Save Settings',
+                'button.open_settings': 'Open System Settings',
                 'placeholder.model_path': 'Select or enter model file path',
                 'option.press_to_hold': 'Press to Hold',
                 'option.toggle': 'Toggle',
@@ -401,6 +409,58 @@
             } catch (error) {
                 console.error('Failed to load settings:', error);
             }
+        }
+
+        // Load permissions status
+        async function loadPermissions() {
+            try {
+                const response = await fetch(`${API_BASE}/api/permissions`);
+                if (!response.ok) {
+                    throw new Error('Failed to load permissions');
+                }
+                const permissions = await response.json();
+
+                // Update microphone status
+                const micStatus = document.getElementById('mic-status');
+                const micBtn = document.getElementById('mic-settings-btn');
+                if (permissions.microphone && permissions.microphone.granted) {
+                    micStatus.className = 'status granted';
+                    micStatus.innerHTML = '✓ <span data-i18n="label.granted">許可済み</span>';
+                    micBtn.style.display = 'none';
+                } else {
+                    micStatus.className = 'status denied';
+                    micStatus.innerHTML = '✗ <span data-i18n="label.denied">未許可</span>';
+                    micBtn.style.display = 'inline-block';
+                }
+
+                // Update accessibility status
+                const accessibilityStatus = document.getElementById('accessibility-status');
+                const accessibilityBtn = document.getElementById('accessibility-settings-btn');
+                if (permissions.accessibility && permissions.accessibility.granted) {
+                    accessibilityStatus.className = 'status granted';
+                    accessibilityStatus.innerHTML = '✓ <span data-i18n="label.granted">許可済み</span>';
+                    accessibilityBtn.style.display = 'none';
+                } else {
+                    accessibilityStatus.className = 'status denied';
+                    accessibilityStatus.innerHTML = '✗ <span data-i18n="label.denied">未許可</span>';
+                    accessibilityBtn.style.display = 'inline-block';
+                }
+
+                // Update i18n texts for status labels
+                updateUILanguage();
+            } catch (error) {
+                console.error('Failed to load permissions:', error);
+            }
+        }
+
+        // Open system settings for microphone
+        function openMicrophoneSettings() {
+            window.location.href = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone';
+        }
+
+        // Open system settings for accessibility
+        function openAccessibilitySettings() {
+            window.location.href = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility';
         }
 
         // Load audio devices
@@ -812,6 +872,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('EzS2T-Whisper settings page loaded');
             loadSettings();
+            loadPermissions();
 
             // Add debounced validation on model path input
             const modelPathInput = document.getElementById('model-path');

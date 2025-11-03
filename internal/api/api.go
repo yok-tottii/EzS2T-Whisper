@@ -12,6 +12,7 @@ import (
 	"github.com/yok-tottii/EzS2T-Whisper/internal/audio"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/config"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/hotkey"
+	"github.com/yok-tottii/EzS2T-Whisper/internal/permissions"
 	"github.com/yok-tottii/EzS2T-Whisper/internal/wizard"
 	hk "golang.design/x/hotkey"
 )
@@ -450,15 +451,17 @@ func (h *Handler) handlePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Get actual permission status
-	// For now, return mock data
-	permissions := map[string]Permission{
-		"microphone":    {Granted: true},
-		"accessibility": {Granted: true},
+	// Get actual permission status
+	permChecker := permissions.NewPermissionChecker()
+	permsStatus := permChecker.CheckAllPermissions()
+
+	perms := map[string]Permission{
+		"microphone":    {Granted: permsStatus["microphone"]},
+		"accessibility": {Granted: permsStatus["accessibility"]},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(permissions)
+	json.NewEncoder(w).Encode(perms)
 }
 
 // handleModelsBrowse handles POST /api/models/browse

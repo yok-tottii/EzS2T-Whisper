@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"reflect"
 	"runtime"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -110,9 +109,8 @@ func main() {
 	app.trayMgr = tray.NewManager(tray.Config{
 		OnReady:        app.onReady,
 		OnSettings:     app.handleOpenSettings,
-		OnRescanModels: app.handleRescanModels,
 		OnRecordTest:   app.handleRecordTest,
-		OnAbout:        app.handleAbout,
+		OnDeviceChange: app.handleDeviceChange,
 		OnQuit:         app.handleQuit,
 	})
 
@@ -174,6 +172,7 @@ func (a *App) onReady() {
 		a.audioDriver, err = audio.NewPortAudioDriver()
 		if err != nil {
 			a.logger.Error("PortAudioドライバの作成に失敗: %v", err)
+			a.audioDriver = nil
 		} else {
 			a.audioConfig = audio.DefaultConfig()
 			// 設定ファイルのデバイスIDを反映（-1の場合はシステムデフォルト）
@@ -181,6 +180,12 @@ func (a *App) onReady() {
 			a.logger.Info("設定からオーディオデバイスIDを適用: %d", a.config.AudioDeviceID)
 			if err := a.audioDriver.Initialize(a.audioConfig); err != nil {
 				a.logger.Error("オーディオドライバの初期化に失敗: %v", err)
+				// Initialize失敗時はドライバをクローズしてnilに設定
+				if closeErr := a.audioDriver.Close(); closeErr != nil {
+					a.logger.Error("ドライバのクローズに失敗: %v", closeErr)
+				}
+				a.audioDriver = nil
+				a.trayMgr.ShowError(fmt.Sprintf("オーディオデバイスの初期化に失敗しました。設定画面でデバイスを変更してください。\nエラー: %v", err))
 			} else {
 				a.logger.Info("オーディオドライバ初期化完了")
 				// API HandlerにAudioDriverを設定
@@ -221,6 +226,9 @@ func (a *App) onReady() {
 	}
 
 	a.logger.Info("アプリケーション初期化完了")
+
+	// デバイスメニューを初期化
+	a.updateDeviceMenu()
 
 	// HTTPサーバーを起動
 	if err := a.httpServer.Start(); err != nil {
@@ -269,8 +277,13 @@ func (a *App) hotkeyEventLoop() {
 	for event := range eventChan {
 		switch event.Type {
 		case hotkey.Pressed:
-			if !a.micGranted || a.audioDriver == nil {
+			if !a.micGranted {
 				a.logger.Warn("ホットキー押下検出しましたが、マイク権限がないため無視します")
+				continue
+			}
+			if a.audioDriver == nil {
+				a.logger.Warn("ホットキー押下検出しましたが、オーディオデバイスが初期化されていないため無視します")
+				a.trayMgr.ShowError("オーディオデバイスが初期化されていません。設定画面でデバイスを確認してください。")
 				continue
 			}
 
@@ -392,13 +405,6 @@ func (a *App) handleOpenSettings() {
 	}()
 }
 
-// handleRescanModels はモデルディレクトリを再スキャン
-func (a *App) handleRescanModels() {
-	a.logger.Info("モデル再スキャン要求")
-	a.trayMgr.ShowNotification("モデル再スキャン", "モデルディレクトリを再スキャンしています...")
-	// TODO: 実装
-}
-
 // handleRecordTest は録音テストを実行
 func (a *App) handleRecordTest() {
 	a.logger.Info("録音テスト要求")
@@ -420,7 +426,7 @@ func (a *App) handleRecordTest() {
 
 		if a.audioDriver == nil {
 			a.logger.Error("録音テスト: オーディオドライバが初期化されていません")
-			a.trayMgr.ShowError("オーディオドライバの初期化に失敗しています。")
+			a.trayMgr.ShowError("オーディオデバイスが初期化されていません。設定画面でデバイスを確認してください。")
 			return
 		}
 
@@ -497,27 +503,132 @@ func (a *App) handleRecordTest() {
 	}()
 }
 
-// handleAbout はバージョン情報を表示
-func (a *App) handleAbout() {
-	a.logger.Info("バージョン情報表示要求")
+// updateDeviceMenu はトレイメニューのデバイスリストを更新
+func (a *App) updateDeviceMenu() {
+	a.logger.Info("デバイスメニューを更新します")
 
-	// バージョン情報をダイアログで表示
-	info := []string{
-		"EzS2T-Whisper",
-		"",
-		fmt.Sprintf("Version: %s", version),
-		"",
-		"高速ローカル音声認識アプリケーション",
-		"",
-		"Copyright © 2025 yoktotti",
-		"MIT License",
+	// 利用可能なデバイスリストを取得
+	var devices []tray.Device
+
+	if a.audioDriver != nil {
+		audioDevices, err := a.audioDriver.ListDevices()
+		if err != nil {
+			a.logger.Error("デバイスリストの取得に失敗: %v", err)
+			return
+		}
+
+		// audio.Device を tray.Device に変換
+		for _, dev := range audioDevices {
+			devices = append(devices, tray.Device{
+				ID:        dev.ID,
+				Name:      dev.Name,
+				IsDefault: dev.IsDefault,
+				IsCurrent: dev.ID == a.config.AudioDeviceID,
+			})
+		}
+	} else {
+		// audioDriverがnilの場合は、一時的なドライバを作成してデバイスリストを取得
+		tempDriver, err := audio.NewPortAudioDriver()
+		if err != nil {
+			a.logger.Error("一時的なオーディオドライバの作成に失敗: %v", err)
+			// デフォルトデバイスのみを表示
+			devices = []tray.Device{
+				{ID: -1, Name: "システムデフォルト", IsDefault: true, IsCurrent: a.config.AudioDeviceID == -1},
+			}
+		} else {
+			defer tempDriver.Close()
+			audioDevices, err := tempDriver.ListDevices()
+			if err != nil {
+				a.logger.Error("デバイスリストの取得に失敗: %v", err)
+				devices = []tray.Device{
+					{ID: -1, Name: "システムデフォルト", IsDefault: true, IsCurrent: a.config.AudioDeviceID == -1},
+				}
+			} else {
+				for _, dev := range audioDevices {
+					devices = append(devices, tray.Device{
+						ID:        dev.ID,
+						Name:      dev.Name,
+						IsDefault: dev.IsDefault,
+						IsCurrent: dev.ID == a.config.AudioDeviceID,
+					})
+				}
+			}
+		}
 	}
 
-	dialogText := strings.Join(info, "\\n")
-	script := fmt.Sprintf(`display dialog "%s" buttons {"OK"} default button "OK" with title "バージョン情報"`, dialogText)
+	// トレイメニューを更新
+	a.trayMgr.UpdateDeviceMenu(devices)
+	a.logger.Info("デバイスメニューを更新しました: %d個のデバイス", len(devices))
+}
 
-	// goroutineで非同期実行（UIブロックを防ぐ）
-	go exec.Command("osascript", "-e", script).Run()
+// handleDeviceChange はデバイス変更要求を処理
+func (a *App) handleDeviceChange(deviceID int) {
+	// 並行実行を防止（ReloadHotkeyと同じmutexを使用）
+	a.reloadHotkeyMutex.Lock()
+	defer a.reloadHotkeyMutex.Unlock()
+
+	a.logger.Info("デバイス変更要求: デバイスID %d", deviceID)
+
+	// 権限チェック
+	if !a.micGranted {
+		a.logger.Warn("デバイス変更: マイク権限がありません")
+		a.trayMgr.ShowError("マイク権限が必要です。システム設定で許可してください。")
+		return
+	}
+
+	// 設定ファイルを更新
+	a.config.AudioDeviceID = deviceID
+	configPath := config.GetConfigPath()
+	if err := a.config.Save(configPath); err != nil {
+		a.logger.Error("設定ファイルの保存に失敗: %v", err)
+		a.trayMgr.ShowError(fmt.Sprintf("設定の保存に失敗しました: %v", err))
+		return
+	}
+	a.logger.Info("設定ファイルを更新しました: audio_device_id=%d", deviceID)
+
+	// 既存のオーディオドライバをクローズ
+	if a.audioDriver != nil {
+		a.logger.Info("既存のオーディオドライバをクローズします")
+		if err := a.audioDriver.Close(); err != nil {
+			a.logger.Error("オーディオドライバのクローズに失敗: %v", err)
+		}
+		a.audioDriver = nil
+	}
+
+	// 新しいデバイスで初期化
+	var err error
+	a.audioDriver, err = audio.NewPortAudioDriver()
+	if err != nil {
+		a.logger.Error("PortAudioドライバの作成に失敗: %v", err)
+		a.audioDriver = nil
+		a.trayMgr.ShowError(fmt.Sprintf("オーディオドライバの作成に失敗しました: %v", err))
+		// メニューを更新して状態を反映
+		a.updateDeviceMenu()
+		return
+	}
+
+	a.audioConfig.DeviceID = deviceID
+	if err := a.audioDriver.Initialize(a.audioConfig); err != nil {
+		a.logger.Error("オーディオドライバの初期化に失敗: %v", err)
+		if closeErr := a.audioDriver.Close(); closeErr != nil {
+			a.logger.Error("ドライバのクローズに失敗: %v", closeErr)
+		}
+		a.audioDriver = nil
+		a.trayMgr.ShowError(fmt.Sprintf("デバイスの初期化に失敗しました。別のデバイスを選択してください。\nエラー: %v", err))
+		// メニューを更新して状態を反映
+		a.updateDeviceMenu()
+		return
+	}
+
+	a.logger.Info("オーディオドライバの初期化が完了しました")
+	// API HandlerにAudioDriverを設定
+	a.apiHandler.SetAudioDriver(a.audioDriver)
+
+	// メニューを更新して変更を反映
+	a.updateDeviceMenu()
+
+	// 成功通知
+	a.trayMgr.ShowSuccess("入力デバイスを変更しました")
 }
 
 // shutdown は終了処理を一度だけ実行し、systrayを終了する

@@ -1,6 +1,7 @@
 package tray
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -27,15 +28,15 @@ type Manager struct {
 	state            State
 	onReadyCallback  func()
 	onSettings       func()
-	onRescanModels   func()
 	onRecordTest     func()
-	onAbout          func()
+	onDeviceChange   func(deviceID int) // Called when user selects a device
 	onQuit           func()
-	menuSettings     *systray.MenuItem
-	menuRescan       *systray.MenuItem
-	menuRecordTest   *systray.MenuItem
-	menuAbout        *systray.MenuItem
-	menuQuit         *systray.MenuItem
+	menuSettings      *systray.MenuItem
+	menuDevices       *systray.MenuItem      // Parent menu for device selection
+	menuRecordTest    *systray.MenuItem
+	menuQuit          *systray.MenuItem
+	deviceMenuItems   []*systray.MenuItem    // Device submenu items
+	deviceCancelFuncs []context.CancelFunc   // Cancel functions for device menu goroutines
 
 	// Icon cache
 	iconIdle       []byte
@@ -47,9 +48,8 @@ type Manager struct {
 type Config struct {
 	OnReady        func() // Called when systray is ready for initialization
 	OnSettings     func()
-	OnRescanModels func()
 	OnRecordTest   func()
-	OnAbout        func()
+	OnDeviceChange func(deviceID int) // Called when user selects a device
 	OnQuit         func()
 }
 
@@ -59,9 +59,8 @@ func NewManager(config Config) *Manager {
 		state:           StateIdle,
 		onReadyCallback: config.OnReady,
 		onSettings:      config.OnSettings,
-		onRescanModels:  config.OnRescanModels,
 		onRecordTest:    config.OnRecordTest,
-		onAbout:         config.OnAbout,
+		onDeviceChange:  config.OnDeviceChange,
 		onQuit:          config.OnQuit,
 	}
 
@@ -86,12 +85,11 @@ func (m *Manager) onReady() {
 
 	// Add menu items
 	m.menuSettings = systray.AddMenuItem("設定を開く...", "Open settings page")
-	m.menuRescan = systray.AddMenuItem("モデルを再スキャン", "Rescan model directory")
+	m.menuDevices = systray.AddMenuItem("入力デバイス", "Select input device")
 	m.menuRecordTest = systray.AddMenuItem("録音テスト", "Test recording pipeline")
 
 	systray.AddSeparator()
 
-	m.menuAbout = systray.AddMenuItem("バージョン情報", "Show version information")
 	m.menuQuit = systray.AddMenuItem("終了", "Quit the application")
 
 	// Start event loop
@@ -116,17 +114,9 @@ func (m *Manager) handleMenuEvents() {
 			if m.onSettings != nil {
 				m.onSettings()
 			}
-		case <-m.menuRescan.ClickedCh:
-			if m.onRescanModels != nil {
-				m.onRescanModels()
-			}
 		case <-m.menuRecordTest.ClickedCh:
 			if m.onRecordTest != nil {
 				m.onRecordTest()
-			}
-		case <-m.menuAbout.ClickedCh:
-			if m.onAbout != nil {
-				m.onAbout()
 			}
 		case <-m.menuQuit.ClickedCh:
 			if m.onQuit != nil {
@@ -158,6 +148,72 @@ func (m *Manager) updateIcon() {
 	case StateProcessing:
 		systray.SetIcon(m.iconProcessing)
 		systray.SetTooltip("EzS2T-Whisper - 処理中")
+	}
+}
+
+// Device represents an audio device for the menu
+type Device struct {
+	ID        int
+	Name      string
+	IsDefault bool
+	IsCurrent bool
+}
+
+// UpdateDeviceMenu updates the device submenu with available devices
+func (m *Manager) UpdateDeviceMenu(devices []Device) {
+	// Cancel existing device menu goroutines
+	for _, cancel := range m.deviceCancelFuncs {
+		if cancel != nil {
+			cancel()
+		}
+	}
+	m.deviceCancelFuncs = nil
+
+	// Remove existing device menu items
+	for _, item := range m.deviceMenuItems {
+		item.Hide()
+	}
+	m.deviceMenuItems = nil
+
+	// Add new device menu items
+	for _, device := range devices {
+		// Create closure to capture device ID
+		deviceID := device.ID
+		deviceName := device.Name
+
+		// Add checkmark if current device
+		prefix := ""
+		if device.IsCurrent {
+			prefix = "✓ "
+		}
+
+		// Add tooltip for default device
+		tooltip := ""
+		if device.IsDefault {
+			tooltip = "System default device"
+		}
+
+		menuItem := m.menuDevices.AddSubMenuItem(prefix+deviceName, tooltip)
+		m.deviceMenuItems = append(m.deviceMenuItems, menuItem)
+
+		// Create context for this goroutine
+		ctx, cancel := context.WithCancel(context.Background())
+		m.deviceCancelFuncs = append(m.deviceCancelFuncs, cancel)
+
+		// Handle device selection in a goroutine with cancellation
+		go func(id int, item *systray.MenuItem, ctx context.Context) {
+			for {
+				select {
+				case <-ctx.Done():
+					// Context cancelled, exit goroutine
+					return
+				case <-item.ClickedCh:
+					if m.onDeviceChange != nil {
+						m.onDeviceChange(id)
+					}
+				}
+			}
+		}(deviceID, menuItem, ctx)
 	}
 }
 
